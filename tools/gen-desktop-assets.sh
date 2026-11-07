@@ -6,8 +6,11 @@
 #
 # Why a generator instead of checked-in AI art: PNGs produced here are
 # byte-for-byte reproducible, have no licensing ambiguity, are small, and can
-# be regenerated after a palette change without a design tool. Phase 7 replaces
-# these PLACEHOLDER images with the final SVG-derived logo/artwork.
+# be regenerated after a palette change without a design tool.
+# PHASE 7 DECISION (ADR-022): these geometric PNGs ARE the v0.1 wallpapers.
+# Phase 7 finalised the BOOT art (GRUB/Plymouth/syslinux) and shipped a real
+# ar0x-cursors XCursor theme, but deliberately KEEPS these wallpapers. A v0.2
+# art set may replace them at the SAME paths without any config churn.
 #
 # Outputs (all absolute paths):
 #   /home/user/ar0xOS/assets/wallpapers/ar0x-neon-grid.png    3840x2160

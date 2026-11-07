@@ -1,0 +1,30 @@
+ar0x brand assets — Creative Commons Attribution-ShareAlike 4.0 International
+===============================================================================
+
+Applies to:
+  /home/user/ar0xOS/assets/logo/ar0x-logo.svg
+  /home/user/ar0xOS/assets/logo/ar0x-logo-mono.svg
+  /home/user/ar0xOS/assets/logo/ar0x-wordmark.svg
+  /home/user/ar0xOS/assets/logo/ar0x-logo-256.png
+  /home/user/ar0xOS/assets/logo/ar0x-logo-512.png
+  /home/user/ar0xOS/assets/icons/ar0x-logo.svg
+  /home/user/ar0xOS/assets/cursors/ar0x-cursors/**
+  /home/user/ar0xOS/config/branding/ascii/**
+  and all raster boot artwork produced by tools/gen-theme-assets.sh.
+
+Copyright (c) 2026 ar0x project (https://github.com/ar0x1/ar0xOS).
+
+You are free to share and adapt this material for any purpose, even
+commercially, provided you give appropriate credit to the ar0x project, link
+to the licence, indicate changes, and distribute adaptations under the SAME
+licence (CC BY-SA 4.0). No additional restrictions may be applied.
+
+Full legal text: https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+NOTE ON CODE: the generator scripts tools/gen-branding-assets.sh,
+tools/gen-theme-assets.sh and tools/lib/*.py are NOT brand assets; they are
+part of the ar0xOS source tree and follow the repository's own licence.
+
+NOTE ON UPSTREAM: ar0x is an Arch Linux derivative. "Arch Linux" and the Arch
+logo are trademarks of the Arch Linux project and are NOT covered by this
+licence; ar0x ships its own independent identity.

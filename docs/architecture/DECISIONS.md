@@ -2,7 +2,7 @@
 
 > Phase 1 companion to [`PROJECT_PLAN.md`](../../PROJECT_PLAN.md).
 > Each ADR records the decision, the alternatives, the tradeoff accepted, and the reversal cost.
-> Status: **ACCEPTED** unless noted. Date: 2026-11-03.
+> Status: **ACCEPTED** unless noted. Date: 2026-11-03 (updated 2026-11-07 with ADR-022).
 
 ---
 
@@ -233,8 +233,12 @@ in Phase 11; default enforcement is a v0.2 decision.
 
 ## ADR-015 — Color palette and identity (locked)
 
-**Decision:** single `config/branding/palette.conf` is the source of truth; every theme
-(GRUB, Plymouth, SDDM, GTK, Qt, Waybar, Hyprland borders, fastfetch) derives its colors from it.
+**Decision (Phase 7 refined):** the eight `AR0X_*` hex pins in `config/versions.env` are
+the authoritative palette. `config/branding/palette.conf` is the human-readable brand
+specification and MUST mirror them byte-for-byte. Every theme (GRUB, Plymouth, SDDM,
+GTK, Qt, Waybar, Hyprland borders, fastfetch, SVG masters, raster generators, XCursor
+binaries) derives its colours from that chain. `tools/configure-branding.sh --check` and
+`tools/validate-versions.sh` both fail on any drift.
 
 | Token | Hex | Role |
 |---|---|---|
@@ -248,8 +252,11 @@ in Phase 11; default enforcement is a v0.2 decision.
 | `AR0X_ALERT` | `#FF5C57` | Errors |
 
 **Tradeoff:** a dark, high-contrast neon palette is striking but can reduce readability in bright
-environments and is not accessibility-neutral. Phase 7 will ship a `AR0X_HIGH_CONTRAST` variant
-in the theme package. Contrast ratio `AR0X_CYAN` on `AR0X_VOID` is ≈ 12.8:1 (passes WCAG AA).
+environments and is not accessibility-neutral. Contrast ratio `AR0X_CYAN` on `AR0X_VOID` is
+≈ 12.8:1 (passes WCAG AA). ⚠️ **Phase 7 correction:** the earlier promise of an
+`AR0X_HIGH_CONTRAST` variant was NOT implemented in Phase 7 — it depends on the
+`ar0x-theme` package (Phase 8) and a live GTK/Qt QA loop. It is now a **v0.2** item;
+the mono SVG (`currentColor`) is the only light-media variant shipped in v0.1.
 
 ---
 
@@ -365,12 +372,14 @@ entries are the recovery path instead.
 
 **Decision 3 — fontless GRUB gfxmenu theme.** archiso 92 builds the EFI binary with
 `grub-mkstandalone --themes=""` and embeds no font. Named `*-font` keys in `theme.txt` would
-cause unpredictable fallback, so the theme omits them and `grub.cfg` has a guarded `loadfont`
-for a future Phase 7 `ar0x-16.pf2`.
+cause unpredictable fallback, so the theme omits them and `grub.cfg` has a guarded `loadfont`.
+**Phase 7 confirmed** the fontless design and ships NO `ar0x-16.pf2`; the guard simply
+stays dormant.
 
 **Decision 4 — deterministic generated PNG artwork.** `tools/gen-theme-assets.sh` embeds a
-pure-zlib PNG encoder (no ImageMagick/font/network). 24 placeholder images are byte-reproducible
-and licence-clean; Phase 7 replaces them with the SVG-derived final art.
+pure-zlib PNG encoder (no ImageMagick/font/network). 24 images are byte-reproducible and licence-clean; **Phase 7 replaced** the
+bitmap-font placeholder wordmark with the official SVG-derived logomark at the
+same paths and dimensions (shared geometry in `tools/lib/ar0x_logo.py`).
 
 **Reversal cost:** LOW for the theme/initramfs; **HIGH** for the kernel (see RISK-001).
 
@@ -446,19 +455,23 @@ GTK3 = `Adwaita-dark` (shipped by `gtk3`) + `~/.config/gtk-3.0/gtk.css`
 overrides. GTK4/libadwaita = `GTK_THEME=Adwaita-dark` + 20 `@define-color`
 variables in `~/.config/gtk-4.0/gtk.css`. Qt5/Qt6 = `qt5ct`/`qt6ct` with
 `style=Fusion` and each package's own `darker.conf`. Icons = `Papirus-Dark`
-(`[extra]`), cursor = `Adwaita` placeholder (RISK-040), fonts = Inter +
+(`[extra]`), cursor = `Adwaita` placeholder in Phase 6, **REPLACED in Phase 7** by the
+generated `ar0x-cursors` XCursor theme (RISK-040 CLOSED), fonts = Inter +
 JetBrains Mono Nerd + Noto. **Rejected:** Kvantum + AUR GTK themes (breaks
 reproducibility), `libadwaita-without-adwaita-git` (patched system library),
 and Bibata/Capitaine cursors (AUR-only). A fully standalone ar0x GTK theme
 engine is deferred to the `ar0x-theme` package in Phase 8 (RISK-042).
 
-**Decision 4 — generated placeholder art at the FINAL paths.**
+**Decision 4 — deterministic generated art at the FINAL paths (KEPT in v0.1).**
 `gen-desktop-assets.sh` writes three 3840×2160 PNGs and a 1920×1080 SDDM
 background with a pure-zlib encoder (no ImageMagick, no fonts, no network,
 ~250 KB total, byte-reproducible). `hyprpaper.conf`, `hyprlock.conf` and
 `theme.conf` reference the installed paths from Phase 1's
-`assets/wallpapers/PLACEHOLDERS.md`, so Phase 7 swaps the art with zero config
-churn. Committing large AI art would risk the 2.2 GiB ISO gate and licensing.
+`assets/wallpapers/PLACEHOLDERS.md`. Phase 7 finalised the **BOOT** art (GRUB,
+Plymouth, syslinux) at the same paths from the official SVG geometry, and kept the
+generated geometric wallpapers as the deliberate v0.1 art (licence-clean,
+reproducible, ~250 KB). Committing large AI art would risk the 2.2 GiB ISO gate
+and licensing. A photographic/vector wallpaper set remains a v0.2 item.
 
 **Decision 5 — no global `GDK_BACKEND` (RISK-039).** Phase 5's choice is
 inherited: forcing Wayland globally breaks GTK apps under XWayland. Both
@@ -471,6 +484,54 @@ creating a Phase 6 preset. Two files owning unit state drift apart.
 
 **Reversal cost:** LOW for configs, MEDIUM for the SDDM QML theme (needs a Qt6
 greeter to re-test).
+
+## ADR-022 — SVG-authoritative brand identity, standard XCursor, no AUR fetch tool
+
+**Status:** ACCEPTED (Phase 7). **Date:** 2026-11-07.
+
+**Decision 1 — one authoritative geometry.** `assets/logo/ar0x-logo.svg`
+(`viewBox="0 0 512 512"`) is the master. `tools/lib/ar0x_logo.py` mirrors its
+octagon, chevron, underscore, node rect and stroke widths, and is imported by
+BOTH `tools/gen-theme-assets.sh` (boot art) and `tools/gen-branding-assets.sh`
+(logo PNGs). `--check` parses the SVG XML and asserts equality with the module,
+so the boot splash and the standalone logo cannot drift apart.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **SVG + shared Python geometry ✅** | no renderer needed, byte-reproducible, one source | raster is a round-join approximation (RISK-046) |
+| Render SVG with Inkscape/rsvg at build time | pixel-exact | extra host dependency, non-deterministic across versions |
+| Two independent generators | simple | boot art and logo silently diverge |
+
+**Decision 2 — real XCursor theme, not a compiled hyprcursor theme.**
+`tools/lib/ar0x_xcursor.py` writes the documented `Xcur` binary format directly
+(5 shapes × 3 nominal sizes + 12 aliases) and parses every file back. Hyprland,
+XWayland, GTK3/GTK4 and Qt all read standard XCursor themes from
+`/usr/share/icons/<theme>/cursors/`. `Inherits=Adwaita` covers any unauthored
+name. RISK-040 is CLOSED. Rejected: a hand-authored `manifest.hl` without
+compiled cursors (not loadable) and `hyprcursor-util` (unavailable on the build
+host). A compiled hyprcursor variant is a v0.2 item.
+
+**Decision 3 — `screenfetch` yes, `neofetch` no.** `screenfetch 3.9.9-1` is an
+official `[extra]` package and gets a branded `-a` art script + the
+`/usr/local/bin/ar0x-screenfetch` wrapper. `neofetch` was removed from Arch
+`[extra]` and is AUR-only (RISK-010); its config is **shipped** for post-install
+use but the package is **not** on the ISO. fastfetch remains the default and
+uses `logo.type = "file"` with `$1`–`$9` colour placeholders.
+
+**Decision 4 — identity written twice.** `/etc/os-release` AND
+`/usr/lib/os-release` both carry the ar0x identity because Arch's `filesystem`
+package makes the former a symlink to the latter. `/etc/issue` uses only the
+whitelisted agetty escapes; `/etc/issue.net` is plain text.
+
+**Tradeoffs accepted:** no live art render (RISK-044 HIGH); live Inter text in
+the wordmark SVG (RISK-045); round-join raster approximation (RISK-046); no
+compiled hyprcursor theme and no neofetch package in v0.1; no
+`AR0X_HIGH_CONTRAST` variant yet (v0.2).
+
+**Reversal cost:** LOW for identity/ASCII/SVG; MEDIUM for the XCursor set
+(replace `/usr/share/icons/ar0x-cursors/` and re-run `--sync`).
+
+---
 
 ## Summary of accepted tradeoffs
 
@@ -496,4 +557,5 @@ greeter to re-test).
 | 018 hooks + staged profile | no deprecated code, clean Git tree | one extra profile copy; build-time repo SigLevel relaxed |
 | 019 stock LTS + zstd initramfs | zero kernel maintenance, fast boot | cannot enable options Arch left off; no fallback initramfs |
 | 020 NetworkManager + balanced hardening | developer tools keep working | less kernel lockdown than a hardened distro |
-| 021 Lua-only desktop + Qt6 SDDM | 0.57 correctness, no AUR deps, reproducible art | no custom GTK/Qt theme engine yet; placeholder cursor/art |
+| 021 Lua-only desktop + Qt6 SDDM | 0.57 correctness, no AUR deps, reproducible art | no custom GTK/Qt theme engine yet (deferred to `ar0x-theme` P8) |
+| 022 SVG-authoritative identity + standard XCursor | one geometry source, no compiler, RISK-040 closed | no compiled hyprcursor, no neofetch package, no live art render |

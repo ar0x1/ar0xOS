@@ -99,13 +99,15 @@ flowchart TD
         C5["C5 journald + sysctl"]
         C6["C6 nftables + AppArmor"]
     end
-    subgraph V["BRANDING"]
-        V1["V1 palette.conf"]
-        V2["V2 os-release/issue/motd/ASCII"]
-        V3["V3 SVG logo spec"]
-        V4["V4 GRUB theme"]
-        V5["V5 Plymouth splash"]
+    subgraph V["BRANDING (Phase 7 ✅)"]
+        V1["V1 palette.conf + versions.env parity"]
+        V2["V2 /etc identity + ASCII x3 + fetch configs"]
+        V3["V3 SVG masters + icon + logo PNGs"]
+        V4["V4 GRUB theme (final art + layout)"]
+        V5["V5 Plymouth splash (final art)"]
         V6["V6 SDDM theme"]
+        V7["V7 ar0x-cursors XCursor theme"]
+        V8["V8 syslinux splash (final art)"]
     end
     subgraph D["DESKTOP"]
         D1["D1 Hyprland 0.57.1 + lua"]
@@ -254,8 +256,8 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 | 7 | B4 | `bootstrap.sh`: stage `archiso/` → `/opt/ar0x-build/profile/` (drop `[ar0x]` block if no db), then `mkarchiso -v -m "bootstrap iso" -w work -o out <stage>` → `work/x86_64/airootfs` | 3,4,5,6 |
 | 8 | B5 | `pacman -Q --sysroot work/x86_64/airootfs > out/packages.lock` | 7 |
 | 9 | K1 | install `linux-lts 6.18.59-1` + headers in airootfs | 7 |
-| 10 | V1 | `config/branding/palette.conf` (source of truth) | 7 |
-| 11 | V2/V3/V4/V5/V6 | branding files, SVG spec, GRUB/Plymouth/SDDM art | 10 |
+| 10 | V1 | `config/versions.env` 8 hex pins + `config/branding/palette.conf` parity gate | 7 |
+| 11 | V2/V3/V4/V5/V6/V7/V8 | `/etc` identity, 3 ASCII variants, 4 SVGs + 2 logo PNGs + `LOGO` icon, 5 XCursor shapes × 3 sizes + 12 aliases, final GRUB/Plymouth/syslinux art, `tools/lib/{ar0x_logo.py,ar0x_xcursor.py}`, `gen-branding-assets.sh`, `configure-branding.sh`, `docs/BRANDING_GUIDE.md` | 10 |
 | 12 | C1–C6 | `configure-system.sh --sync`: 23 `config/system/**` files → `/etc/**`; `config/pacman.conf.installed` → `/etc/pacman.conf`; `--apply` runs `locale-gen` + `systemctl preset-all` in chroot | 7 |
 | 13 | K2 | `build-kernel.sh --audit-config /boot/config-linux-lts` (stock kernel; NO compile) then `--sync` of `config/mkinitcpio.conf` + preset | 9, 1 |
 | 14 | K4 | install Plymouth `ar0x` script theme + `plymouth` hook into the initramfs | 11, 13 |
@@ -267,6 +269,7 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 | 20 | D4 | GTK3/GTK4, Qt5/Qt6 (`qt5ct:qt6ct`), fontconfig, icons, cursors, Waybar/kitty/wofi/mako | 10, 18 |
 | 21 | D5 | SDDM Qt6 QML theme (`Main.qml`, `metadata.desktop`, `theme.conf`, bg.png) + `/etc/sddm.conf.d/10-ar0x.conf` | 10, 17, 18 |
 | 21b | D6 | `configure-desktop.sh --sync`: render `config/desktop/<tool>/**` → `skel/.config/**`, mirror `skel/**` → `/etc/skel/**`, `etc/**` → `/etc/**`, art → `/usr/share/**`; `--apply` refreshes caches + `preset-all` + `Hyprland --verify-config` | 12, 17, 19, 20, 21 |
+| 21c | V2/V3/V7 | `configure-branding.sh --sync`: mirror identity → `/etc/**` + `/usr/lib/os-release`, ASCII/SVG/icon → `/usr/share/**`, fetch configs → `/etc/skel/.config/**`; `--check` parses every SVG/PNG/XCursor back | 10, 11, 21b |
 | 22 | T1–T4 | `ar0x-welcome`, `ar0x-update`, `ar0x-info`, `.desktop`, first-boot unit | 11, 21 |
 | 23 | T5 | `makepkg -s` → 8 signed `.pkg.tar.zst` packages | 21, 22 |
 | 24 | R1 | GPG keys in `/opt/ar0x-build/keys` (mode 0700) | 3 |
@@ -293,7 +296,7 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 The **squashfs compression step (S2)** and the **pacstrap download (B4)** dominate. They are
 accelerated by the shared `cache/pacman/pkg` and by keeping `work/` on NVMe.
 
-**Parallelisable while B4 runs:** V1–V3 (pure text), V2 (branding), T1–T3 (Python/shell source),
+**Parallelisable while B4 runs:** V1–V8 (pure text + pure-Python generators), T1–T3 (Python/shell source),
 I2 module configs, and the PKGBUILD sources. These are all in the SOURCE ROOT and require no
 root privileges — they are the work that can be done in this sandbox ahead of the host build.
 
@@ -323,6 +326,12 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | Qt5-only QML imports in the SDDM theme | Qt6 greeter fails to load (RISK-038) | `QtVersion=6` metadata + import-line assertion; no `QtGraphicalEffects` |
 | Global `GDK_BACKEND` | breaks XWayland GTK apps (RISK-039) | Comment-safe grep in two validators |
 | Editing a GENERATED `skel/.config/**` copy directly | next `--sync` silently reverts it | `--check` asserts every generated copy is byte-identical to canonical |
+| Two generators each carrying their own logo geometry | boot splash and standalone logo silently diverge | ONE `tools/lib/ar0x_logo.py` imported by both generators; `--check` parses the SVG and asserts equality |
+| Editing `palette.conf` without `versions.env` (or vice versa) | GRUB/Plymouth/SDDM/Hyprland colours drift | 8/8 hex parity asserted by `configure-branding.sh --check` AND `validate-versions.sh` |
+| Adding `neofetch` to `packages.x86_64` | AUR-only package breaks the reproducible ISO (RISK-010) | `configure-branding.sh --check` + `validate-versions.sh` both fail if it appears |
+| A hand-written `Xcur` file with wrong TOC offsets | compositor silently falls back to Adwaita | `ar0x_xcursor.verify_xcursor()` parses magic/header/TOC/chunks/pixel count on every generated file |
+| `set -euo pipefail` added to the screenFetch art snippet | strict mode leaks into screenFetch and aborts it | explicit exemption in `validate-versions.sh` + assertion in `configure-branding.sh --check` |
+| `ar0x-screenfetch` wrapper not executable | `ar0x-screenfetch` fails at login | `--sync` chmod 0755; `--check` asserts `-x` on the profile copy |
 | Calamares built before Qt/KPMcore present | Link/compile failure | `R4 → I1` plus Phase 2 host package check |
 
 ---
@@ -331,7 +340,7 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 
 ```
 GATE-1 (you confirm P1) ──> P2 ──> GATE-2 ──> P3 ──> GATE-3 ──> P4 ──> GATE-4
-   ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ──> GATE-7 ──> P8 ──> GATE-8
+   ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ──> GATE-8
    ──> P9 ──> GATE-9 ──> P10 ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
 ```
 

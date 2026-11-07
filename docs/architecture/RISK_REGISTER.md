@@ -44,7 +44,7 @@
 | **RISK-028** | **MEDIUM** | GRUB theme not embedded → unbranded boot menu | Verified archiso 92 `files_to_copy` non-`.cfg` rule puts `archiso/grub/themes/ar0x/` at ISO `/boot/grub/themes/`; `--check` asserts `set theme=` | P4/P11 |
 | **RISK-029** | **MEDIUM** | `plymouth` hook before `udev` → no splash / broken initramfs | `--check` enforces hook order in both live drop-in and base config | P4 |
 | **RISK-030** | **LOW** | LUKS passphrase prompt invisible (no message renderer in script theme) | Documented `details` theme fallback + FAILSAFE entry; v0.1 defaults to unencrypted ext4 | P4/P10 |
-| **RISK-031** | **LOW** | Placeholder PNG art shipped as final branding | Phase 7 explicitly replaces it; paths and generator recorded | P4/P7 |
+| **RISK-031** | ✅ **CLOSED** | Placeholder PNG art shipped as final branding | **Phase 7 DELIVERED**: `tools/gen-theme-assets.sh` now draws the official SVG-derived logomark into GRUB/Plymouth/syslinux art at the same paths/dimensions; `theme.txt` re-laid out so the menu never overlaps it | P4/P7 |
 
 | **RISK-032** | **HIGH** | Frozen `pacman.conf.build` accidentally shipped as `/etc/pacman.conf` → users stuck on 2026-11-01 | RISK-006: two files, `--sync` writes only the installed one to `/etc`, two validators assert the split | P5/P10 |
 | **RISK-033** | ⚠️ **HIGH** | Passwordless `root`/`ar0x` on the LIVE ISO | Warned at every `--check`; never copied to target; Calamares creates hashed passwords | P5/P10 |
@@ -55,10 +55,13 @@
 
 | **RISK-038** | **MEDIUM** | Arch `sddm 0.21.0-7` hard-depends on `xorg-server`; the GREETER is X11 while the user session is Wayland; Qt5-only QML imports break the Qt6 greeter | Documented in ADR-021 + `docs/DESKTOP_GUIDE.md`; QML uses only `QtQuick`/`SddmComponents 2.0`; `QtVersion=6` asserted; `DisplayServer=wayland` NOT enabled | P6/P11 |
 | **RISK-039** | **MEDIUM** | Global `GDK_BACKEND` breaks GTK apps that must run under XWayland | Absent from `lua/env.lua` and `/etc/environment.d/`; `--check` and `validate-versions.sh` both fail if reintroduced | P6 |
-| **RISK-040** | **LOW** | Adwaita cursor + generated geometric wallpapers are placeholders, not final ar0x identity | Final art ships at the SAME paths in Phase 7; `assets/wallpapers/PLACEHOLDERS.md` records sources and licence | P6/P7 |
+| **RISK-040** | ✅ **CLOSED** | Adwaita cursor + generated geometric wallpapers are placeholders, not final ar0x identity | **Phase 7 DELIVERED**: real `ar0x-cursors` XCursor theme (5 shapes × 3 sizes + 12 aliases, generated + parsed back), `XCURSOR_THEME=ar0x-cursors` in Lua/environment.d/skel; boot art finalised. Generated geometric wallpapers are kept as the **deliberate v0.1 art** (licence-clean, reproducible) — see ADR-021 D4. `assets/wallpapers/PLACEHOLDERS.md` records sources | P6/P7 |
 | **RISK-041** | **MEDIUM** | Blur/animations look broken under QEMU/llvmpipe software rendering | Conservative blur (2 passes) and animation speeds; QEMU Wayland QA is manual | P6/P11 |
 | **RISK-042** | **MEDIUM** | libadwaita hard-codes Adwaita; GTK4 apps ignore `gtk-theme-name` by upstream design | `GTK_THEME` + 20 `@define-color` overrides; documented; full theme engine deferred to `ar0x-theme` (P8) | P6/P8 |
 | **RISK-043** | ⚠️ **HIGH** | SDDM QML theme and Wayland session were NEVER rendered in this sandbox (no root / display / QEMU / Hyprland binary) | `--check` does structural validation (balanced delimiters, imports, metadata, palette, JSONC, XML, Lua `require()` resolution); §7 of `DESKTOP_GUIDE.md` is the MANDATORY manual test matrix | P6/P11 |
+| **RISK-044** | ⚠️ **HIGH** | Phase 7 brand art (GRUB gfxmenu, Plymouth script splash, syslinux vesamenu, XCursor shapes) was NEVER rendered on a live display in this sandbox | `configure-branding.sh --check` parses back every SVG (XML), PNG (signature + IHDR), Xcursor (magic/TOC/chunk/pixel count), JSONC and shell snippet; §8 of `BRANDING_GUIDE.md` lists exactly what was verified; QEMU UEFI+BIOS visual QA is a Phase 11 MANUAL gate | P7/P11 |
+| **RISK-045** | **LOW** | `assets/logo/ar0x-wordmark.svg` uses LIVE `<text>` in Inter; machines without Inter reflow or substitute the wordmark | Inter (`inter-font`) IS on the ISO; `BRANDING_GUIDE.md` §1.4 gives the exact Inkscape *Path → Object to Path* manual step for print/outlining | P7/P12 |
+| **RISK-046** | **LOW** | Deterministic PNG raster uses distance-to-segment (round joins) where the SVG polygon has mitre joins | SVG remains authoritative for all vector/print use; PNGs exist only for GRUB/Plymouth/syslinux/raster fallback; documented in `BRANDING_GUIDE.md` §1.9 | P7/P12 |
 
 ---
 
@@ -72,8 +75,8 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 3 | ⚠️ **RISK-023** (destructive `--clean`), RISK-021, RISK-022, RISK-024, RISK-025, RISK-006 |
 | 4 | ⚠️ **RISK-001** (kernel patching — ZERO patches applied), RISK-027, RISK-028, RISK-029, RISK-030, RISK-031, RISK-007 (Secure Boot/MOK) |
 | 5 | ⚠️ **RISK-033** (passwordless live user), RISK-032, RISK-034 (host-kernel safety), RISK-008, RISK-014, RISK-035, RISK-036, RISK-037 |
-| 6 | ⚠️ **RISK-043** (no live desktop QA), **RISK-002** (Lua-only), RISK-038, RISK-039, RISK-040, RISK-041, RISK-042, RISK-009 |
-| 7 | none critical — visual QA is manual |
+| 6 | ⚠️ **RISK-043** (no live desktop QA), **RISK-002** (Lua-only), RISK-038, RISK-039, RISK-041, RISK-042, RISK-009; RISK-040 CLOSED in P7 |
+| 7 | ⚠️ **RISK-044** (no live art render), RISK-045 (live SVG text), RISK-046 (raster joins), **RISK-040 CLOSED**; `configure-branding.sh --apply` is ROOT-only, rebuilds initramfs + `grub.cfg`, and has NO automatic rollback |
 | 8 | RISK-013 |
 | 9 | ⚠️ **RISK-003** (Codeberg), RISK-011 (key custody) |
 | 10 | ⚠️ **RISK-004** (destructive partitioning), RISK-013 |

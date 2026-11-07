@@ -155,7 +155,8 @@ fi
 ```
 
 ⚠️ **`theme.txt` contains no `*-font` keys** because `--themes=""` embeds no font. GRUB falls back
-to its built-in font. `grub.cfg` has a guarded `loadfont` for a future `ar0x-16.pf2` (Phase 7).
+to its built-in font. `grub.cfg` keeps a guarded `loadfont ar0x-16.pf2`; **Phase 7 CONFIRMED
+the fontless design** and ships no `.pf2` file, so the guard stays dormant.
 
 The required modules (`png`, `gfxmenu`, `gfxterm`, `all_video`) are already in archiso 92's
 `grubmodules` list, so `insmod` is safe.
@@ -213,12 +214,17 @@ zlib PNG encoder (no ImageMagick, no fonts, no network, no root) and produces:
 | `assets/plymouth/ar0x/logo.png` | 320×80 |
 | `assets/plymouth/ar0x/progress-{0..20}.png` | 400×6 each |
 
-The "ar0x" wordmark is a tiny built-in 5×7 bitmap font — no external font dependency. Palette
-comes from `config/versions.env` (ADR-015): void `#07090F`, surface `#11151F`, cyan `#00E5FF`,
-magenta `#FF2E88`, lime `#A8FF60`, text `#D7E0EE`, muted `#6B7891`.
+**Phase 7 FINAL ART (RISK-031 CLOSED).** The old bitmap-font placeholder wordmark is gone.
+`tools/gen-theme-assets.sh` now draws the OFFICIAL 512×512 logomark from
+`tools/lib/ar0x_logo.py` (geometry mirrored from `assets/logo/ar0x-logo.svg`) into
+all three boot surfaces at the SAME paths and dimensions. GRUB `theme.txt` was
+re-laid out (`boot_menu top = 34%`) so the menu never overlaps the logo. The
+5×7 bitmap font remains only for the short "ar0x" caption. Palette comes from
+`config/versions.env` (ADR-015): void `#07090F`, surface `#11151F`, cyan
+`#00E5FF`, magenta `#FF2E88`, lime `#A8FF60`, text `#D7E0EE`, muted `#6B7891`.
 
-⚠️ **These are PLACEHOLDERS.** Phase 7 delivers the SVG logo, style guide, wallpapers and final
-bigger artwork. Keep the paths; replace the PNGs.
+Regenerate + propagate: `./tools/gen-theme-assets.sh && ./tools/build-kernel.sh --sync`.
+Full style rules: `docs/BRANDING_GUIDE.md`.
 
 ---
 
@@ -231,7 +237,7 @@ bigger artwork. Keep the paths; replace the PNGs.
 | `=m` accepts `=y` in the auditor | exact-value compare | Arch moves symbols between built-in/module across point releases |
 | `COMPRESSION="zstd"` | upstream `xz -9e` | `CONFIG_RD_ZSTD=y` verified; far faster live-boot decompress |
 | `PRESETS=('default')` only | also build `-fallback` | Halves initramfs payload on a ~2 GB ISO; failsafe GRUB entries are the recovery path |
-| Fontless GRUB theme | custom `ar0x.pf2` | archiso embeds no font; built-in font is guaranteed. Phase 7 may add one |
+| Fontless GRUB theme | custom `ar0x.pf2` | archiso embeds no font; built-in font is guaranteed. **Phase 7 confirmed this** and ships no font |
 | `UI vesamenu.c32` | `menu.c32` (text) | Required for `MENU BACKGROUND`; costs one `.c32` already shipped |
 | Script-plugin Plymouth | `two-step` / `fade-in` plugins | No compiled plugin, tiny initramfs footprint, deterministic frames |
 
@@ -245,7 +251,7 @@ bigger artwork. Keep the paths; replace the PNGs.
 | 2 | `sudo ./tools/build-kernel.sh --rebuild-initramfs` | Needs root + an existing airootfs |
 | 3 | `--lock-config` on a real host | Needs outbound internet (GitLab) |
 | 4 | Visual QEMU UEFI + BIOS splash QA (Phase 11) | Needs KVM; cannot verify graphics in a chroot |
-| 5 | Replace placeholder PNGs in Phase 7 | Design decision |
+| 5 | ✅ DONE in Phase 7: replaced placeholder PNGs with SVG-derived logomark | Design decision; `gen-theme-assets.sh` regenerates them |
 | 6 | `plymouth-set-default-theme -R details` for LUKS | Only if encrypted installs are wanted |
 
 ---
@@ -256,7 +262,7 @@ bigger artwork. Keep the paths; replace the PNGs.
 |---|---|---|
 | Black screen after GRUB | missing `CONFIG_RD_ZSTD` / wrong initramfs compression | `--audit-config`; use the FAILSAFE entry (`plymouth.enable=0 nomodeset loglevel=7`) |
 | GRUB shows plain text menu | theme file not at `/boot/grub/themes/ar0x/` | `./tools/build-kernel.sh --sync`; check `archiso/grub/themes/ar0x/theme.txt` |
-| GRUB menu labels invisible | no font loaded | Built-in font is used; Phase 7 can add `ar0x-16.pf2` + `loadfont` |
+| GRUB menu labels invisible | no font loaded | Built-in font is used; the guarded `loadfont ar0x-16.pf2` activates only if a font is ever shipped (not in v0.1) |
 | BIOS menu ignores background | `UI menu.c32` instead of `vesamenu.c32` | `syslinux.cfg` must use `UI vesamenu.c32` |
 | Plymouth never appears | `plymouth` missing from `packages.x86_64` or hook order wrong | `--check` fails on both |
 | `plymouth-set-default-theme: command not found` | `plymouth` package absent in airootfs | `sudo pacman -S plymouth` on host; ensure package list synced |
@@ -275,7 +281,7 @@ bigger artwork. Keep the paths; replace the PNGs.
 | **RISK-028** | **MEDIUM** | GRUB theme not embedded → unbranded boot | Verified archiso 92 `files_to_copy` non-`.cfg` rule; `--check` asserts `set theme=` |
 | **RISK-029** | **MEDIUM** | Plymouth hook before `udev` → no splash / broken initramfs | `--check` enforces hook order in both configs |
 | **RISK-030** | **LOW** | LUKS prompt invisible | Documented; `details` theme fallback + FAILSAFE entry |
-| **RISK-031** | **LOW** | Placeholder art shipped as final | Phase 7 explicitly replaces it; paths documented |
+| **RISK-031** | ✅ **CLOSED** | Placeholder art shipped as final | **Phase 7 replaced** the bitmap wordmark with the official SVG-derived logomark at the same paths/dimensions |
 
 ---
 

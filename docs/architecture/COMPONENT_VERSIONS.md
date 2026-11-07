@@ -88,7 +88,7 @@ variable; `QT_QPA_PLATFORM=wayland;xcb` (semicolon list) is the platform list.
 GTK4/libadwaita ignores `gtk-theme-name` and only honours `GTK_THEME` plus
 `@define-color` overrides loaded at process start. Papirus, Adwaita cursors,
 `inter-font`, `ttf-jetbrains-mono-nerd` and `noto-fonts(-emoji)` are all in
-Arch `[extra]`, so no AUR package is needed for the theme (RISK-004).
+Arch `[extra]`, so no AUR package is needed for the theme (RISK-010).
 
 **ADR-017 consequence:** HARD-pinned packages are built with `makepkg -s` from exact upstream
 tarballs into `[ar0x]`, and `config/pacman.conf.build` lists `[ar0x]` **first** via a local
@@ -281,6 +281,29 @@ their content changes, so `pacman -Syu` sees a newer package.
 
 ---
 
+## 9b. Phase 7 brand/identity facts (verified 2026-11-07)
+
+Full detail, installed paths and the exact style rules: `docs/BRANDING_GUIDE.md`.
+
+| Component | Verified fact | Source |
+|---|---|---|
+| `os-release(5)` | `LOGO=` is a freedesktop icon-theme name, **added in systemd 252**; `VERSION_CODENAME` must be lower-case without spaces; no shell variable expansion is permitted | freedesktop.org `os-release(5)`, Debian manpages |
+| `agetty(8)` | `/etc/issue` expands only `\s \m \r \n \l \d \t \v \b \o \u \U`; `issue.net` is **not** expanded | util-linux man page, screenFetch 3.9.9 README |
+| fastfetch | `logo.type = "file"` expands `$1`–`$9` from `logo.color`; `"file-raw"` does not. Builtin logos in `src/logo/ascii/a/*.txt` use the same `$N` syntax | fastfetch `dev` branch source |
+| neofetch | `image_backend="ascii"` + `image_source="/path/to/ascii"` (flag `--source`) loads custom ASCII. **Removed from Arch `[extra]`** and archived upstream → AUR-only → NOT on the ISO (RISK-010) | `dylanaraps/neofetch` source; `archlinux.org/packages/extra/any/neofetch/` returns 404 |
+| screenfetch | Arch `[extra]` **3.9.9-1** (official). `-a PATH` sources a Bash snippet defining `startline`, `logowidth`, `fulloutput[]` (one `%s` per line) | Arch package search; `KittyKatt/screenFetch` `asciiText()` |
+| Xcursor(3) | magic `Xcur`, file header 16 bytes, TOC `(type, subtype, position)`, image chunk `headerSize=36`, type `0xfffd0002`, subtype = nominal size, `width*height` packed ARGB CARD32 | X.org / Arch `Xcursor(3)` |
+| GRUB 2 gfxmenu | percent-based `top`/`height` in `theme.txt`; `boot_menu` and `progress_bar` (`id="__timeout__"`) | GRUB manual theme-file format |
+
+**Phase 7 multipliers:** master SVG `viewBox="0 0 512 512"`, wordmark
+`viewBox="0 0 1024 256"`, 8 hex pins shared with `config/versions.env`,
+5 authored XCursor shapes × 3 nominal sizes (24/32/48) + 12 aliases,
+21 Plymouth progress frames, 3 ASCII logo variants, 4 SVG masters,
+2 logo PNG rasters. All formats are parsed back by
+`tools/configure-branding.sh --check`.
+
+---
+
 ## 10. Version validation procedure
 
 `tools/validate-versions.sh` (Phase 1 helper, runnable in this sandbox) performs:
@@ -295,7 +318,15 @@ their content changes, so `pacman -Syu` sees a newer package.
    (once Phase 3 has created that file), and that the frozen mirror never leaks into
    `config/pacman.conf.installed` (RISK-006).
 6. Sweep **every** `*.sh` in the repo (`tools/`, `docker/`, `vagrant/`) for the required
-   `#!/bin/bash` shebang and `set -euo pipefail`, and assert all 8 Phase 2 deliverable files exist.
+   `#!/bin/bash` shebang and `set -euo pipefail`, and assert all 8 Phase 2 deliverable files
+   exist. SOURCED snippets are explicitly exempt: `archiso/profiledef.sh`,
+   `config/system/profile.d/*.sh`, `archiso/airootfs/etc/profile.d/*.sh` and
+   `config/branding/ascii/ar0x-screenfetch.sh`.
+7. (Phase 7) Assert all 28 Phase 7 deliverables, 8/8 palette pins across
+   `versions.env` ↔ `palette.conf` ↔ SVG ↔ GRUB theme, SVG geometry ↔
+   `tools/lib/ar0x_logo.py`, ASCII `$N` parity, 5 XCursor files parsed back with
+   12 aliases, `/etc` identity mirrors, `XCURSOR_THEME=ar0x-cursors`, and
+   `screenfetch` present / `neofetch` absent in `packages.x86_64`.
 
 On the real build host, Phase 3 additionally generates `packages.lock` from `pacman -Q` inside
 `$AR0X_WORK_DIR/x86_64/airootfs`. That lockfile, plus the frozen mirror date, is what makes

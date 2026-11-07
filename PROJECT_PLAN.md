@@ -1,8 +1,8 @@
 # ar0x — Architecture & Project Plan
 
 > **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
-> Document version: `1.0.0` · Date: `2026-11-03` · Repository: `ar0x1/ar0xOS`
-> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phase 1 complete, awaiting confirmation gate**
+> Document version: `1.7.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–7 complete; Phase 8 awaiting confirmation**
 >
 > All versions in this document were verified against upstream releases on 2026-11-03.
 > Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
@@ -218,6 +218,7 @@ Two roots are deliberately separated:
 │   ├── KERNEL_BOOT.md                     # Phase 4
 │   ├── SYSTEM_CONFIG.md                   # Phase 5
 │   ├── DESKTOP_GUIDE.md                   # Phase 6
+│   ├── BRANDING_GUIDE.md                  # Phase 7
 │   ├── INSTALLER_FLOW.md                  # Phase 10
 │   ├── TESTING_CHECKLIST.md               # Phase 11
 │   └── RELEASE_NOTES_TEMPLATE.md          # Phase 12
@@ -250,10 +251,12 @@ Two roots are deliberately separated:
 │   │   ├── etc/{sddm.conf.d,environment.d,xdg}/  # → /etc/** 1:1
 │   │   └── skel/                          # → /etc/skel/** 1:1 (11 dotfiles)
 │   │       └── .config/{hypr,waybar,gtk-*,qt*ct,...} # GENERATED copies
-│   ├── branding/                          # Phase 7
-│   │   ├── os-release, lsb-release, issue, motd
-│   │   ├── fastfetch/
-│   │   └── palette.conf
+│   ├── branding/                          # Phase 7 ✅ CANONICAL identity
+│   │   ├── os-release, lsb-release, issue, issue.net, motd
+│   │   ├── palette.conf                   # 8 hex pins (parity with versions.env)
+│   │   ├── ascii/{ar0x-ascii.txt,ar0x-fastfetch.txt,ar0x-screenfetch.sh}
+│   │   ├── fastfetch/config.jsonc , neofetch/config.conf
+│   │   └── screenfetch/ar0x-screenfetch.sh
 │   ├── calamares/                         # Phase 10
 │   │   ├── settings.conf
 │   │   └── modules/
@@ -274,14 +277,18 @@ Two roots are deliberately separated:
 │   │   └── usr/ , root/ , opt/ , var/    # NO customize_airootfs.sh (deprecated)
 │   └── bootstrap.sh                       # Phase 3
 ├── assets/
-│   ├── logo/ar0x-logo.svg                 # Phase 7
+│   ├── logo/                              # Phase 7 ✅ SVG MASTERS
+│   │   ├── ar0x-logo.svg (512x512) , ar0x-logo-mono.svg
+│   │   ├── ar0x-wordmark.svg (1024x256) , LICENSE (CC BY-SA 4.0)
+│   │   └── ar0x-logo-{256,512}.png       # generated raster fallbacks
 │   ├── wallpapers/                        # Phase 6 ✅ 3x 4K PNG + PLACEHOLDERS.md
-│   ├── plymouth/ar0x/                     # Phase 4/7
-│   ├── grub-theme/ar0x/                   # Phase 4/7
-│   ├── syslinux/splash.png                 # Phase 4/7
+│   ├── plymouth/ar0x/                     # Phase 4 ✅ / Phase 7 ✅ final art
+│   ├── grub-theme/ar0x/                   # Phase 4 ✅ / Phase 7 ✅ final art + layout
+│   ├── syslinux/splash.png                 # Phase 4 ✅ / Phase 7 ✅ final art
 │   ├── sddm/ar0x/                         # Phase 6 ✅ Qt6 QML theme + bg.png
-│   ├── icons/ , cursors/
-│   └── ascii/ar0x-ascii.txt               # Phase 7
+│   ├── icons/ar0x-logo.svg                 # Phase 7 ✅ LOGO=ar0x-logo icon
+│   ├── cursors/ar0x-cursors/               # Phase 7 ✅ XCursor theme (RISK-040 CLOSED)
+│   └── ascii/README.md                     # Phase 7 ✅ canonical art lives in config/branding/
 ├── packages/                              # Phase 8 — PKGBUILDs
 │   ├── ar0x-welcome/ , ar0x-update/ , ar0x-info/
 │   ├── ar0x-theme/ , ar0x-wallpapers/ , ar0x-hypr-config/
@@ -295,6 +302,9 @@ Two roots are deliberately separated:
 │   ├── configure-system.sh                # Phase 5 — core system config
 │   ├── configure-desktop.sh               # Phase 6 — --check/--sync/--apply
 │   ├── gen-desktop-assets.sh              # Phase 6 — deterministic 4K wallpapers
+│   ├── lib/{common.sh,ar0x_logo.py,ar0x_xcursor.py}  # Phase 7 shared geometry
+│   ├── gen-branding-assets.sh             # Phase 7 — logo PNGs + XCursor binaries
+│   ├── configure-branding.sh              # Phase 7 — --check/--sync/--apply
 │   ├── setup-repo.sh                      # Phase 9
 │   ├── build-iso.sh                       # Phase 11 (master orchestrator)
 │   ├── checksum.sh                        # Phase 11
@@ -429,7 +439,7 @@ flowchart TD
     P3 --> P5["P5 Core System Config"]
     P4 --> P5
     P5 --> P6["P6 Desktop &amp; Theming"]
-    P3 --> P7["P7 Branding &amp; Identity"]
+    P3 --> P7["P7 Branding &amp; Identity ✅"]
     P4 --> P7
     P7 --> P6
     P6 --> P8["P8 Custom ar0x Tools"]
@@ -465,7 +475,7 @@ repo-add + sign → calamares config → mkarchiso build → QEMU smoke → chec
 | SDDM + GTK4 + Python GTK4 (ar0x-welcome) | ~350 MB | ~140 MB | |
 | Mesa 26.2.6 + firmware (linux-firmware subset) | ~900 MB | ~360 MB | ⚠️ full `linux-firmware` is ~400 MB alone |
 | Kernel + initramfs (with Plymouth) | ~250 MB | ~180 MB | initramfs is NOT squashfs-compressed |
-| Boot catalogs, EFI loaders, GRUB theme, assets | ~120 MB | ~90 MB | wallpapers = placeholder paths, small JPEGs |
+| Boot catalogs, EFI loaders, GRUB theme, assets | ~120 MB | ~90 MB | wallpapers = 3 deterministic 4K PNGs (~250 KB), kept as v0.1 art (ADR-022) |
 | **Total** | **~4.5 GB** | **~1.9 GB** | gate: **fail if > 2.2 GB** |
 
 **Tradeoffs when the budget is exceeded (in the order I will apply them):**
@@ -631,6 +641,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-019 | Stock LTS + zstd initramfs | Zero kernel maintenance vs. cannot enable config options Arch left off |
 | ADR-020 | NetworkManager + balanced hardening | Developer tool compatibility vs. maximal kernel lockdown |
 | ADR-021 | Lua-only desktop, Qt6 SDDM, balanced toolkit theming | 0.57 correctness + reproducibility vs. a full custom GTK/Qt theme engine |
+| ADR-022 | SVG-authoritative identity, standard XCursor, no AUR fetch tool | one geometry source + no build-time compiler vs. a compiled hyprcursor theme and shipping neofetch |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -653,6 +664,9 @@ Full register with mitigations and trigger conditions:
 | RISK-007 | MEDIUM | Secure Boot MOK enrollment can soft-brick a machine if mishandled |
 | RISK-008 | MEDIUM | AppArmor enforcing breaks portals → screen sharing/screenshots fail |
 | RISK-009 | MEDIUM | SDDM X11 greeter + Wayland session mismatch on NVIDIA |
+| RISK-044 | ⚠️ HIGH | Brand art never rendered live in this sandbox — structural validation only (P7) |
+| RISK-045 | LOW | `ar0x-wordmark.svg` uses live Inter text; outline for print (P7) |
+| RISK-046 | LOW | PNG raster uses round joins where the SVG uses mitre joins (P7) |
 | RISK-010 | LOW | Rolling Arch snapshot drift despite archive pin (AUR/git sources) |
 
 ---
@@ -667,7 +681,7 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 3 | `arch-chroot` smoke test; visually inspect the live root | You | Requires root + mount namespaces |
 | 4 | Review kernel `.config` diff in `menuconfig` if any option is changed | You | ⚠️ RISK-001 |
 | 4 | Generate + store GPG/MOK keys; enroll MOK in firmware | You | Private key must stay offline; firmware UI |
-| 7 | Visual QA of Plymouth/GRUB/SDDM artwork | You | Aesthetic judgment |
+| 7 | Visual QA of Plymouth/GRUB/SDDM/cursor artwork; ⚠️ `configure-branding.sh --apply` rebuilds initramfs + `grub.cfg` | You | Aesthetic judgment + RISK-044; no display/KVM/root in sandbox |
 | 9 | Generate release signing key; publish fingerprint | You | Key custody |
 | 10 | Walk the installer flow; **verify the target disk before confirming partitioning** | You | ⚠️ RISK-004, destructive |
 | 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox |
@@ -687,9 +701,9 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 3 | Base System Bootstrap | Full archiso 92 profile (`profiledef.sh`, `pacman.conf`, `packages.x86_64`, `bootstrap_packages.x86_64`, `airootfs/`, `grub/`, `syslinux/`), `config/pacman.conf.build` frozen mirror, `tools/bootstrap.sh`, `docs/BOOTSTRAP_GUIDE.md` chroot guide | `bootstrap.sh --check` passes; `mkarchiso` produces a bootable minimal live root |
 | **4** | Kernel & Boot ✅ | RISK-001: **stock LTS, ZERO patches**; `config/kernel/{README.md,ar0x-lts.config}` audit contract, `config/{mkinitcpio.conf,mkinitcpio.d,default/grub,plymouth/plymouthd.conf}`, ar0x GRUB/Plymouth/syslinux themes, `assets/` deterministic PNG generator, `tools/build-kernel.sh`, `docs/KERNEL_BOOT.md` | `build-kernel.sh --check` + `--self-test` pass; QEMU UEFI+BIOS splash QA is manual |
 | **5** | Core System Configuration ✅ | NetworkManager (systemd-networkd/dhcpcd disabled), PipeWire + WirePlumber 0.5+, Wayland env, live user/sudo/polkit, locale/tz/keymap, journald/logind, default-drop nftables, AppArmor complain, balanced sysctl — 23 files under `config/system/**`, plus `config/pacman.conf.installed` (rolling), `config/repo/pacman.conf.ar0x-entry`, `tools/configure-system.sh`, `docs/SYSTEM_CONFIG.md` | `configure-system.sh --check` passes; `validate-versions.sh` clean with ZERO warnings; QEMU unit/WiFi/audio QA is manual |
-| **6** | Desktop & Theming ✅ | Hyprland **Lua** entry + 10 modules, `hyprpaper`/`hyprlock`/`hypridle`, Waybar, SDDM 0.21 **Qt6** QML theme, GTK3/GTK4 (libadwaita `@define-color`), Qt5/Qt6 via `qt5ct:qt6ct`, Papirus icons, Adwaita cursor placeholder, Inter/JetBrainsMono Nerd fontconfig, 3× 4K wallpapers, 11 `/etc/skel` dotfiles + 10 generated `.config` trees, `tools/configure-desktop.sh`, `tools/gen-desktop-assets.sh`, `docs/DESKTOP_GUIDE.md` | `configure-desktop.sh --check` + `validate-versions.sh` (0 warnings) pass; `Hyprland --verify-config`, `sddm-greeter --test-mode`, QEMU Wayland QA are manual |
-| **7** | Branding & Identity ← **NEXT (awaiting confirmation)** | `/etc/os-release`, `lsb-release`, `issue`, `motd`, ASCII logo, SVG logo spec, palette, Plymouth + GRUB themes | `fastfetch` shows ar0x identity |
-| 8 | Custom ar0x Tools | `ar0x-welcome` (GTK4), `ar0x-update`, `ar0x-info`, `.desktop` files, PKGBUILDs | All three run; packages install cleanly |
+| **6** | Desktop & Theming ✅ | Hyprland **Lua** entry + 10 modules, `hyprpaper`/`hyprlock`/`hypridle`, Waybar, SDDM 0.21 **Qt6** QML theme, GTK3/GTK4 (libadwaita `@define-color`), Qt5/Qt6 via `qt5ct:qt6ct`, Papirus icons, Adwaita cursor placeholder (→ real `ar0x-cursors` in Phase 7), Inter/JetBrainsMono Nerd fontconfig, 3× 4K wallpapers, 11 `/etc/skel` dotfiles + 10 generated `.config` trees, `tools/configure-desktop.sh`, `tools/gen-desktop-assets.sh`, `docs/DESKTOP_GUIDE.md` | `configure-desktop.sh --check` + `validate-versions.sh` (0 warnings) pass; `Hyprland --verify-config`, `sddm-greeter --test-mode`, QEMU Wayland QA are manual |
+| **7** | Branding & Identity ✅ | `/etc/{os-release,lsb-release,issue,issue.net,motd}` + `/usr/lib/os-release`, `palette.conf`, 3 ASCII variants (fastfetch/neofetch/screenfetch), 4 SVG masters + 2 logo PNGs + `LOGO` icon, real ar0x XCursor theme (5 shapes × 3 sizes + 12 aliases), final GRUB/Plymouth/syslinux art, `tools/lib/{ar0x_logo.py,ar0x_xcursor.py}`, `tools/gen-branding-assets.sh`, `tools/configure-branding.sh`, `docs/BRANDING_GUIDE.md`, ADR-022, RISK-040 closed | `configure-branding.sh --check` + `validate-versions.sh` pass (0 warnings); SVG/PNG/XCursor/JSONC all parsed back; `fastfetch` shows ar0x identity |
+| 8 | Custom ar0x Tools ← **NEXT (awaiting confirmation)** | `ar0x-welcome` (GTK4), `ar0x-update`, `ar0x-info`, `.desktop` files, PKGBUILDs | All three run; packages install cleanly |
 | 9 | Package Repository | `[ar0x]` repo, `repo-add` + signing, GitHub Actions CI, `pacman.conf` entry, `tools/setup-repo.sh` | Signed install from repo works on a clean system |
 | 10 | Installer | Calamares 3.4.3 branding modules, `settings.conf`, all module configs, step-by-step test flow | Full install → reboot → first boot succeeds |
 | 11 | ISO Build & Testing | `tools/build-iso.sh`, `tools/checksum.sh`, QEMU UEFI/BIOS cmds, VBox/VMware steps, `docs/TESTING_CHECKLIST.md` | Checklist 100% pass; ISO < 2.2 GB |
@@ -710,7 +724,12 @@ Steps that **cannot** be automated, flagged here per the output rules:
 6. `ar0x-update --check` and `ar0x-info` run without root; `ar0x-welcome` links resolve.
 7. `pacman -S ar0x-meta` works from the signed `[ar0x]` repo on a stock Arch install.
 8. Every script passes `bash -n` and `shellcheck`; every script starts with
-   `#!/bin/bash` and `set -euo pipefail`.
+   `#!/bin/bash` and `set -euo pipefail`. **Documented exemptions** (they are
+   SOURCED, so strict mode would leak into the parent process):
+   `archiso/profiledef.sh`, `config/system/profile.d/*.sh`,
+   `archiso/airootfs/etc/profile.d/*.sh`, and
+   `config/branding/ascii/ar0x-screenfetch.sh` (sourced by screenFetch 3.9.9).
+   `config/branding/neofetch/config.conf` is a sourced config, not a script.
 
 ---
 
@@ -748,6 +767,15 @@ rule that trimming `linux-firmware` is the *first* size-reduction lever.
 - systemd `sysusers.d` `m` directive + `systemd.preset` — <https://www.freedesktop.org/software/systemd/man/latest/systemd.preset.html>
 - Arch `linux-lts 6.18.59-1` patch 0001 (`kernel.unprivileged_userns_clone`) — <https://gitlab.archlinux.org/archlinux/packaging/packages/linux-lts/-/raw/6.18.59-1/0001-add-sysctl-to-allow-disabling-unprivileged-CLONE_NEW.patch>
 - Hyprland 0.57 Lua API (`hl.config`, `hl.bind`, `hl.dsp`, `hl.env`, `hl.on`, `require()` module paths) — <https://wiki.hypr.land/configuring/core/> , <https://wiki.hypr.land/configuring/core/binds/> , <https://wiki.hypr.land/configuring/core/environment-variables/>
+- `os-release(5)` `LOGO=` field (added in systemd 252), `CPE_NAME`, `VERSION_CODENAME` rules — <https://www.freedesktop.org/software/systemd/man/latest/os-release.html> , <https://manpages.debian.org/testing/systemd/os-release.5.en.html>
+- `agetty(8)` `/etc/issue` escape whitelist (`\s \m \r \n \l \d \t \v \b \o \u \U`) — <https://www.mankier.com/1/agetty> , <https://gist.github.com/ebta/94bd47a2aeb43f25f573927a14d2b8e4>
+- fastfetch `logo.type = file | file-raw`, `$1`–`$9` colour placeholders, `logo.color`, `padding` — <https://github.com/fastfetch-cli/fastfetch/tree/dev/src/logo/ascii/a> , <https://github.com/fastfetch-cli/fastfetch/discussions/2538> , <https://asciiart.pro/guides/how-to-add-custom-logo-to-fastfetch>
+- fastfetch `doc/json_schema.json` / example presets — <https://github.com/fastfetch-cli/fastfetch/tree/dev/presets/examples>
+- neofetch `image_backend="ascii"` + `image_source="/path/to/ascii"` (Flag `--source`) — <https://github.com/dylanaraps/neofetch> (`neofetch` default-config block); removal from Arch `[extra]` confirmed by a 404 on <https://archlinux.org/packages/extra/any/neofetch/>
+- screenFetch 3.9.9 `-a PATH` custom art contract (`startline`, `logowidth`, `fulloutput[]` with one `%s`) — <https://github.com/KittyKatt/screenFetch> (`screenfetch-dev::asciiText`) , <https://manpages.ubuntu.com/manpages/resolute/man1/screenfetch.1.html>
+- Arch `[extra]` `screenfetch 3.9.9-1` (official) — <https://archlinux.org/packages/?name=screenfetch>
+- Xcursor(3) binary format: magic `Xcur`, header 16, TOC, image chunk `headerSize=36`, type `0xfffd0002`, packed ARGB — <https://www.x.org/releases/X11R7.7/doc/man/man3/Xcursor.3.xhtml> , <https://man.archlinux.org/man/Xcursor.3.en>
+- GRUB 2 gfxmenu `theme.txt` percent-based layout keys — <https://www.gnu.org/software/grub/manual/grub/grub.html#Theme-file-format>
 - Hyprland official 0.57 Lua example config — <https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua>
 - hyprpaper `wallpaper { }` blocks, hyprlock colour/widget syntax, hypridle 0.57 Lua DPMS dispatcher — <https://wiki.hypr.land/hypr-ecosystem/user/hyprpaper/> , <https://github.com/hyprwm/hyprlock/blob/main/assets/example.conf> , <https://wiki.hypr.land/hypr-ecosystem/user/hypridle/>
 - SDDM 0.21.0-7 Qt6 greeter, `xorg-server` hard dependency, `sddm.conf(5)` `[Theme] Current=`, QML component property names — <https://archlinux.org/packages/extra/x86_64/sddm/> , <https://github.com/sddm/sddm/tree/develop/components/2.0>

@@ -56,6 +56,8 @@ REQUIRED_KEYS=(
     AR0X_CALAMARES_VERSION AR0X_CALAMARES_SOURCE AR0X_CALAMARES_SHA256
     AR0X_DEFAULT_SHELL AR0X_SCRIPT_SHELL AR0X_CYAN AR0X_VOID
     AR0X_SECURE_BOOT AR0X_APPARMOR_MODE AR0X_CUSTOM_KERNEL_PATCHES
+    AR0X_BRAND_LOGO_VIEWBOX AR0X_BRAND_WORDMARK_VIEWBOX
+    AR0X_BRAND_LOGO_ICON AR0X_BRAND_CURSOR_THEME AR0X_BRAND_LICENSE
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -151,8 +153,14 @@ while IFS= read -r -d '' sh; do
     #   * config/system/profile.d/  -> sourced by zsh/bash LOGIN shells; a
     #                                  shebang or set -euo pipefail is invalid
     #                                  and would break every login shell
+    #   * config/branding/ascii/ar0x-screenfetch.sh -> SOURCED by screenFetch
+    #                                  3.9.9 `asciiText()`; strict mode would
+    #                                  leak into screenFetch and abort it
+    #   * /usr/share/ar0x/branding/*.sh             -> byte-identical INSTALLED
+    #                                  mirror of the sourced art snippet in the
+    #                                  archiso profile; same exemption applies
     case "$sh" in
-        */archiso/profiledef.sh|*/config/system/profile.d/*.sh|*/archiso/airootfs/etc/profile.d/*.sh) continue ;;
+        */archiso/profiledef.sh|*/config/system/profile.d/*.sh|*/archiso/airootfs/etc/profile.d/*.sh|*/config/branding/ascii/*.sh|*/usr/share/ar0x/branding/*.sh) continue ;;
     esac
     SCRIPT_COUNT=$((SCRIPT_COUNT + 1))
     first_line="$(head -n 1 -- "$sh")"
@@ -178,6 +186,13 @@ REQUIRED_DIRS=(
     config/desktop/etc config/desktop/skel config/desktop/hypr/lua
     assets/sddm/ar0x archiso/airootfs/usr/share/sddm/themes/ar0x
     archiso/airootfs/usr/share/backgrounds/ar0x archiso/airootfs/etc/skel
+    config/branding/ascii config/branding/fastfetch config/branding/neofetch
+    config/branding/screenfetch assets/logo assets/icons
+    assets/cursors/ar0x-cursors assets/ascii
+    archiso/airootfs/usr/share/ar0x/branding archiso/airootfs/usr/share/ar0x/logo
+    archiso/airootfs/usr/share/icons/hicolor/scalable/apps
+    archiso/airootfs/usr/share/icons/ar0x-cursors/cursors
+    archiso/airootfs/usr/local/bin
 )
 for d in "${REQUIRED_DIRS[@]}"; do
     [[ -d "${AR0X_SOURCE_ROOT}/${d}" ]] || fail "Missing directory: ${d}/"
@@ -344,6 +359,128 @@ print('[ OK ] 8 palette pins: versions.env == lua/palette.lua == Main.qml')
 PYV
 ok "Phase 6 policy gates: Lua-only, Qt6 SDDM, Qt5+Qt6 theming, palette parity"
 
+# --- Section 7g: Phase 7 deliverable files + brand policy gates -------------
+PHASE7_FILES=(
+    config/branding/os-release config/branding/lsb-release
+    config/branding/issue config/branding/issue.net config/branding/motd
+    config/branding/palette.conf
+    config/branding/ascii/ar0x-ascii.txt
+    config/branding/ascii/ar0x-fastfetch.txt
+    config/branding/ascii/ar0x-screenfetch.sh
+    config/branding/fastfetch/config.jsonc
+    config/branding/neofetch/config.conf
+    config/branding/screenfetch/ar0x-screenfetch.sh
+    assets/logo/ar0x-logo.svg assets/logo/ar0x-logo-mono.svg
+    assets/logo/ar0x-wordmark.svg assets/logo/LICENSE
+    assets/logo/ar0x-logo-256.png assets/logo/ar0x-logo-512.png
+    assets/icons/ar0x-logo.svg assets/icons/README.md
+    assets/cursors/ar0x-cursors/index.theme
+    assets/cursors/ar0x-cursors/cursor.theme
+    assets/ascii/README.md
+    tools/lib/ar0x_logo.py tools/lib/ar0x_xcursor.py
+    tools/gen-branding-assets.sh tools/configure-branding.sh
+    docs/BRANDING_GUIDE.md
+)
+for f in "${PHASE7_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 7 deliverable: ${f}"
+done
+ok "Phase 7 deliverable files present (${#PHASE7_FILES[@]} files)"
+
+# os-release is the identity contract: ID must NOT be Arch, LOGO must resolve.
+grep -Fxq 'ID=ar0x' "${AR0X_SOURCE_ROOT}/config/branding/os-release" \
+    || fail "Phase 7: /etc/os-release must declare ID=ar0x."
+grep -Fxq 'LOGO=ar0x-logo' "${AR0X_SOURCE_ROOT}/config/branding/os-release" \
+    || fail "Phase 7: os-release LOGO must be ar0x-logo (systemd >= 252)."
+[[ -f "${AR0X_SOURCE_ROOT}/archiso/airootfs/usr/share/icons/hicolor/scalable/apps/ar0x-logo.svg" ]] \
+    || fail "Phase 7: LOGO=ar0x-logo has no installed hicolor icon (run configure-branding.sh --sync)."
+# RISK-006-style guard: the installed /etc mirrors must exist and match.
+for f in os-release lsb-release issue issue.net motd; do
+    cmp -s "${AR0X_SOURCE_ROOT}/config/branding/$f" \
+           "${AR0X_SOURCE_ROOT}/archiso/airootfs/etc/$f" \
+        || fail "Phase 7: /etc/$f mirror is stale (run configure-branding.sh --sync)."
+done
+cmp -s "${AR0X_SOURCE_ROOT}/config/branding/os-release" \
+       "${AR0X_SOURCE_ROOT}/archiso/airootfs/usr/lib/os-release" \
+    || fail "Phase 7: /usr/lib/os-release mirror is stale."
+ok "Phase 7 identity: ID=ar0x, LOGO icon installed, 6 /etc mirrors in sync"
+
+# ADR-015 / ADR-022: palette.conf, SVG masters and boot art share the 8 pins.
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYV' || fail "Phase 7 palette/geometry drift detected."
+import os, re, sys, xml.etree.ElementTree as ET
+root = sys.argv[1]
+sys.path.insert(0, os.path.join(root, 'tools', 'lib'))
+import ar0x_logo as L
+rgb, pins = L.load_palette(root)
+pal = dict(re.findall(
+    r'^AR0X_BRAND_(VOID|SURFACE|CYAN|MAGENTA|LIME|TEXT|MUTED|ALERT)="(#[0-9A-Fa-f]{6})"',
+    open(os.path.join(root, 'config/branding/palette.conf'), encoding='utf-8').read(), re.M))
+assert len(pal) == 8 and pal == pins, 'palette.conf != versions.env'
+svg = open(os.path.join(root, 'assets/logo/ar0x-logo.svg'), encoding='utf-8').read()
+for key in ('CYAN', 'MAGENTA', 'LIME'):
+    assert pins[key] in svg, 'ar0x-logo.svg missing ' + pins[key]
+r = ET.parse(os.path.join(root, 'assets/logo/ar0x-logo.svg')).getroot()
+assert r.get('viewBox') == L.VIEWBOX == '0 0 512 512'
+poly = r.find('{http://www.w3.org/2000/svg}polygon')
+assert tuple(tuple(map(int, p.split(','))) for p in poly.get('points').split()) == L.OCTAGON
+theme = open(os.path.join(root, 'assets/grub-theme/ar0x/theme.txt'), encoding='utf-8').read()
+for key in ('VOID', 'SURFACE', 'CYAN', 'MAGENTA', 'TEXT', 'MUTED'):
+    assert pins[key] in theme, 'GRUB theme.txt missing ' + pins[key]
+print('[ OK ] 8 palette pins: versions.env == palette.conf == SVG == GRUB theme; SVG geometry == ar0x_logo.py')
+PYV
+
+# Phase 6's builtin Arch logo must be gone from every fastfetch config.
+if grep -rFq '"source": "arch"' \
+        "${AR0X_SOURCE_ROOT}/config/branding/fastfetch" \
+        "${AR0X_SOURCE_ROOT}/config/desktop/skel/.config/fastfetch" \
+        "${AR0X_SOURCE_ROOT}/archiso/airootfs/etc/skel/.config/fastfetch" 2>/dev/null; then
+    fail "Phase 7: Phase 6 builtin 'arch' fastfetch logo still present."
+fi
+grep -Fq '"type": "file"' \
+    "${AR0X_SOURCE_ROOT}/config/branding/fastfetch/config.jsonc" \
+    || fail "Phase 7: fastfetch must use the official 'file' logo, not a builtin."
+# ASCII parity: removing $1..$9 from the tagged logo yields the plain logo.
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYV' || fail "Phase 7 ASCII parity broken."
+import os, re, sys
+b = os.path.join(sys.argv[1], 'config/branding/ascii')
+plain = open(os.path.join(b, 'ar0x-ascii.txt'), encoding='utf-8').read()
+tagged = open(os.path.join(b, 'ar0x-fastfetch.txt'), encoding='utf-8').read()
+assert re.sub(r'\$[1-9]', '', tagged) == plain
+art = open(os.path.join(b, 'ar0x-screenfetch.sh'), encoding='utf-8').read()
+assert not re.search(r'^\s*set\s+-euo', art, re.M), 'sourced screenfetch art must not set strict mode'
+print('[ OK ] ASCII: fastfetch tagged == plain after $N strip; screenfetch art is strict-mode-exempt')
+PYV
+
+# RISK-040 closure: real ar0x XCursor theme, not the Adwaita placeholder.
+grep -Fq 'hl.env("XCURSOR_THEME", "ar0x-cursors")' \
+    "${AR0X_SOURCE_ROOT}/config/desktop/hypr/lua/env.lua" \
+    || fail "RISK-040: Hyprland env.lua still uses the Adwaita cursor placeholder."
+grep -Fxq 'XCURSOR_THEME=ar0x-cursors' \
+    "${AR0X_SOURCE_ROOT}/config/desktop/etc/environment.d/20-ar0x-desktop.conf" \
+    || fail "RISK-040: environment.d still uses the Adwaita cursor placeholder."
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYV' || fail "Phase 7 XCursor binaries are invalid."
+import os, sys
+root = sys.argv[1]
+sys.path.insert(0, os.path.join(root, 'tools', 'lib'))
+from ar0x_xcursor import SHAPES, ALIASES, SIZES, verify_xcursor
+cur = os.path.join(root, 'archiso/airootfs/usr/share/icons/ar0x-cursors/cursors')
+for name in SHAPES:
+    p = os.path.join(cur, name)
+    assert os.path.isfile(p), 'missing generated cursor: ' + name
+    assert verify_xcursor(p, SIZES) == len(SIZES)
+for alias, target in ALIASES.items():
+    p = os.path.join(cur, alias)
+    assert os.path.islink(p) and os.readlink(p) == target
+print('[ OK ] XCursor: 5 generated files x 3 sizes parsed back, 12 aliases')
+PYV
+
+# RISK-010: screenfetch is official [extra]; neofetch is AUR-only and must stay OFF the ISO.
+PKGS="${AR0X_SOURCE_ROOT}/config/packages.x86_64"
+grep -Fxq 'screenfetch' "$PKGS" || fail "Phase 7: screenfetch ([extra] 3.9.9-1) missing from packages.x86_64."
+if sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' "$PKGS" | grep -Fxq 'neofetch'; then
+    fail "RISK-010: neofetch is AUR-only and must NOT be on the ISO."
+fi
+ok "Phase 7 policy gates: identity, palette, ASCII, XCursor, fetch packages"
+
 PKG_DUPES="$(sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' \
     "${AR0X_SOURCE_ROOT}/config/packages.x86_64" | sort | uniq -d)"
 if [[ -n "$PKG_DUPES" ]]; then
@@ -377,4 +514,6 @@ printf '   Kernel       : %s %s\n' "${AR0X_KERNEL_FLAVOR}" "${AR0X_KERNEL_VERSIO
 printf '   Snapshot     : %s\n' "${AR0X_SNAPSHOT_DATE}"
 printf '   Desktop      : Hyprland %s (%s config)\n' "${AR0X_HYPRLAND_VERSION}" "${AR0X_HYPR_CONFIG_FORMAT}"
 printf '   Installer    : Calamares %s (%s)\n' "${AR0X_CALAMARES_VERSION}" "${AR0X_CALAMARES_SOURCE}"
+printf '   Brand        : %s logo, %s cursors, %s\n' \
+    "${AR0X_BRAND_LOGO_VIEWBOX}" "${AR0X_BRAND_CURSOR_THEME}" "${AR0X_BRAND_LICENSE}"
 exit 0

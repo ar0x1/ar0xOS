@@ -17,6 +17,9 @@
 #   Phase 5 : tzdata, rtkit + 23 config/system/** drop-ins (apparmor already present)
 #   Phase 6 : 37 packages — Hyprland Lua stack, SDDM Qt6 theme, GTK3/GTK4,
 #             Qt5/Qt6, icons/cursors/fonts, wallpapers, /etc/skel dotfiles
+#   Phase 7 : screenfetch (official [extra] 3.9.9-1). neofetch is AUR-only
+#             (removed from [extra] upstream, RISK-010) and is NOT on the ISO;
+#             its config IS shipped for post-install use.
 #   Phase 8 : ar0x-welcome ar0x-update ar0x-info ar0x-theme ar0x-meta ...
 #   Phase 10: calamares 3.4.3 (from the [ar0x] repo, ADR-017)
 # Phase 11 rebuilds the ISO from the accumulated list. Phase 3's own build is
@@ -117,7 +120,7 @@ tmux
 # HARD pins (hyprland 0.57.1 et al.) resolve from [ar0x] FIRST in
 # config/pacman.conf.build (ADR-017); until Phase 9 builds them, the frozen
 # 2026/11/01 [extra] snapshot supplies 0.57.0-3. Both are Lua-config releases.
-# Only official [core]/[extra] packages are named here — NO AUR (RISK-004).
+# Only official [core]/[extra] packages are named here — NO AUR (RISK-010).
 hyprland
 hyprpaper
 hyprlock
@@ -155,3 +158,9 @@ network-manager-applet
 polkit-gnome
 xdg-user-dirs
 fastfetch
+
+# --- Phase 7: branded fetch tools -------------------------------------------
+# fastfetch (above) is the default. screenfetch is in Arch [extra] and gets the
+# ar0x-screenfetch wrapper + custom Xcursor-coloured ASCII art. neofetch is
+# deliberately ABSENT: AUR-only, upstream archived (RISK-010).
+screenfetch

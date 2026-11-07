@@ -1,8 +1,8 @@
 # /etc/skel/.icons/default/index.theme
-# Cursor theme placeholder. Adwaita is shipped by Arch's adwaita-cursors
-# (a hard dependency of gtk3), so this ALWAYS resolves. Phase 7 replaces
-# "Inherits" with the ar0x hyprcursor theme (RISK-040).
+# PHASE 7 (RISK-040 CLOSED): point new users at the real ar0x XCursor theme.
+# It lives at /usr/share/icons/ar0x-cursors/ and Inherits=Adwaita, so every
+# cursor name we did not author still resolves through the official package.
 [Icon Theme]
 Name=ar0x Default
-Comment=ar0x cursor theme (Phase 6 placeholder: Adwaita)
-Inherits=Adwaita
+Comment=ar0x 0.1.0 "Neon Root" cyan/magenta/lime cursors
+Inherits=ar0x-cursors

@@ -2,21 +2,30 @@
 # -----------------------------------------------------------------------------
 # /home/user/ar0xOS/tools/gen-theme-assets.sh
 # -----------------------------------------------------------------------------
-# PHASE 4 — deterministically generate the ar0x boot artwork (PNG only).
+# PHASE 4 generator / PHASE 7 FINAL ART — deterministically generate ar0x boot
+# artwork (PNG only).
 #
 # Why a generator instead of checked-in AI art: PNGs produced here are
 # byte-for-byte reproducible, have no licensing ambiguity, are tiny (a few KB),
 # and can be regenerated after a palette change without a design tool.
-# Phase 7 replaces these PLACEHOLDER images with the final SVG-derived logo.
 #
-# Outputs (all absolute paths):
-#   /home/user/ar0xOS/assets/grub-theme/ar0x/background.png   1024x768
-#   /home/user/ar0xOS/assets/plymouth/ar0x/logo.png            320x80
-#   /home/user/ar0xOS/assets/plymouth/ar0x/progress-{0..20}.png 400x6
-#   /home/user/ar0xOS/assets/syslinux/splash.png               640x480
+# PHASE 7 CHANGE: the Phase 4 bitmap-font "ar0x" placeholder wordmark is gone.
+# All three backgrounds now draw the OFFICIAL 512x512 logomark from
+# assets/logo/ar0x-logo.svg via the shared geometry in tools/lib/ar0x_logo.py.
+# The same module is used by tools/gen-branding-assets.sh, so the boot splash,
+# the standalone logo PNG and the SVG can never drift apart.
 #
-# Requires: python3 (pulled in by meson/namcap from Phase 2's host toolchain).
-# No root, no network, no ImageMagick, no font files. Pure zlib PNG encoder.
+# Outputs (all relative to the source root):
+#   assets/grub-theme/ar0x/background.png      1024x768
+#   assets/plymouth/ar0x/logo.png              320x80  (horizontal lockup)
+#   assets/plymouth/ar0x/progress-{0..20}.png  400x6
+#   assets/syslinux/splash.png                 640x480
+#
+# Dimensions are CONTRACT with tools/build-kernel.sh::validate_assets() and the
+# GRUB/syslinux/Plymouth configs. Do not change them without editing both.
+#
+# Requires: python3. No root, no network, no ImageMagick, no font files. Pure
+# zlib PNG encoder. Byte-reproducible: zlib level 9, no timestamps, no RNG.
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
@@ -32,83 +41,37 @@ require_command python3
 python3 - "$AR0X_SOURCE_ROOT" <<'PY'
 import os
 import sys
-import zlib
-import struct
 
 ROOT = sys.argv[1]
+sys.path.insert(0, os.path.join(ROOT, "tools", "lib"))
+from ar0x_logo import (load_palette, lerp, logo_overlay, write_png,           # noqa: E402
+                       glyph_masks)
 
-# --- Palette: single source of truth is config/versions.env (ADR-015) --------
-void    = (0x07, 0x09, 0x0F)
-surface = (0x11, 0x15, 0x1F)
-cyan    = (0x00, 0xE5, 0xFF)
-magenta = (0xFF, 0x2E, 0x88)
-text    = (0xD7, 0xE0, 0xEE)
-muted   = (0x6B, 0x78, 0x91)
-grid    = (0x1A, 0x23, 0x30)
+rgb, hex_pins = load_palette(ROOT)
+void, surface = rgb["VOID"], rgb["SURFACE"]
+cyan, magenta = rgb["CYAN"], rgb["MAGENTA"]
+text, muted, lime = rgb["TEXT"], rgb["MUTED"], rgb["LIME"]
+grid = (0x1A, 0x23, 0x30)
+print("[ OK ] ADR-015 palette loaded from config/versions.env (8 pins)")
 
-
-def lerp(a, b, t):
-    return tuple(int(round(a[i] + (b[i] - a[i]) * t)) for i in range(3))
-
-
-def write_png(path, width, height, fn):
-    """Write an RGB PNG. fn(x, y) -> (r, g, b)."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    raw = bytearray()
-    for y in range(height):
-        raw.append(0)                      # filter type 0 (None) for this row
-        for x in range(width):
-            raw.extend(fn(x, y))
-    comp = zlib.compress(bytes(raw), 9)
-
-    def chunk(tag, data):
-        return (struct.pack(">I", len(data)) + tag + data
-                + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
-
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)  # 8-bit RGB
-    blob = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
-            + chunk(b"IDAT", comp) + chunk(b"IEND", b""))
-    with open(path, "wb") as fh:
-        fh.write(blob)
-    return len(blob)
-
-
-# --- Tiny 5x7 bitmap font: just the glyphs we need (ar0x) -------------------
-FONT = {
-    "a": ["01110", "00001", "01111", "10001", "10001", "10011", "01101"],
-    "r": ["00000", "00000", "10110", "11001", "10000", "10000", "10000"],
-    "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
-    "x": ["00000", "00000", "10001", "01010", "00100", "01010", "10001"],
+OUT = {
+    "grub":     os.path.join(ROOT, "assets/grub-theme/ar0x"),
+    "plymouth": os.path.join(ROOT, "assets/plymouth/ar0x"),
+    "syslinux": os.path.join(ROOT, "assets/syslinux"),
 }
 
 
-def glyph_masks(word, scale):
-    """Return a set of (x, y) pixel blocks for a word, scaled up."""
-    pts = set()
-    cursor = 0
-    for ch in word:
-        rows = FONT[ch]
-        for ry, row in enumerate(rows):
-            for rx, bit in enumerate(row):
-                if bit == "1":
-                    pts.add((cursor + rx, ry))
-        cursor += 6                      # 5 columns + 1 space
-    w = cursor * scale
-    h = 7 * scale
-    big = set()
-    for gx, gy in pts:
-        for dy in range(scale):
-            for dx in range(scale):
-                big.add((gx * scale + dx, gy * scale + dy))
-    return big, w, h
+def backdrop(width, height, logo_size, logo_y, caption_scale, accent_frac=0.90):
+    """Dark gradient + engineering grid + OFFICIAL logomark + short caption.
 
-
-def backdrop(width, height, scale_word, word_y, show_word=True):
-    """Cyberpunk dark gradient + grid + accent rule + 'ar0x' wordmark."""
-    mask, mw, mh = glyph_masks(scale_word[0], scale_word[1])
-    ox = (width - mw) // 2
-    oy = word_y
-    accent_y = int(height * 0.78)
+    The GRUB theme.txt no longer draws a header label, so the PNG owns the
+    brand lockup. See assets/grub-theme/ar0x/theme.txt for the new layout.
+    """
+    overlay = logo_overlay((width - logo_size) // 2, logo_y, logo_size, rgb)
+    mask, mw, mh = glyph_masks("ar0x", caption_scale)
+    cap_x = (width - mw) // 2
+    cap_y = logo_y + logo_size + 12
+    accent_y = int(height * accent_frac)
     accent_end = int(width * 0.34)
 
     def fn(x, y):
@@ -119,41 +82,55 @@ def backdrop(width, height, scale_word, word_y, show_word=True):
         # horizontal cyan rule with a short magenta segment
         if accent_y <= y < accent_y + 3 and 0 < x < accent_end:
             return cyan if x < accent_end - 60 else magenta
-        # wordmark: cyan with a 2px dark drop shadow
-        if show_word and oy <= y < oy + mh and ox <= x < ox + mw:
-            if (x - ox, y - oy) in mask:
-                return cyan
-            if (x - ox - 2, y - oy - 2) in mask:
-                return lerp(void, cyan, 0.28)
+        # official logomark (cyan frame + chevron, magenta underscore, lime node)
+        hit = overlay(x, y)
+        if hit is not None:
+            return hit
+        # small "ar0x" bitmap caption below the mark, in primary text colour
+        if cap_y <= y < cap_y + mh and cap_x <= x < cap_x + mw:
+            if (x - cap_x, y - cap_y) in mask:
+                return text
+        # lime status dot + muted version rule under the caption
+        if cap_y + mh + 6 <= y < cap_y + mh + 9:
+            if cap_x <= x < cap_x + 24:
+                return lime
+            if cap_x + 32 <= x < cap_x + mw:
+                return lerp(void, muted, 0.7)
         return base
 
     return fn
 
 
-OUT = {
-    "grub":     os.path.join(ROOT, "assets/grub-theme/ar0x"),
-    "plymouth": os.path.join(ROOT, "assets/plymouth/ar0x"),
-    "syslinux": os.path.join(ROOT, "assets/syslinux"),
-}
-
 # --- GRUB: 1024x768 ----------------------------------------------------------
+# Mark 186px at y=20, caption at 218..260. theme.txt boot_menu starts at 34%
+# (261px), so nothing overlaps. Progress bar 78%, footer 84%.
 write_png(os.path.join(OUT["grub"], "background.png"), 1024, 768,
-          backdrop(1024, 768, ("ar0x", 14), 210))
+          backdrop(1024, 768, logo_size=186, logo_y=20, caption_scale=6,
+                   accent_frac=0.90))
 
 # --- syslinux/vesamenu: 640x480 ---------------------------------------------
 write_png(os.path.join(OUT["syslinux"], "splash.png"), 640, 480,
-          backdrop(640, 480, ("ar0x", 9), 120))
+          backdrop(640, 480, logo_size=140, logo_y=14, caption_scale=5,
+                   accent_frac=0.90))
 
-# --- Plymouth logo: 320x80 ---------------------------------------------------
-mask, mw, mh = glyph_masks("ar0x", 8)
-ox, oy = (320 - mw) // 2, 12
+# --- Plymouth logo: 320x80 HORIZONTAL LOCKUP ---------------------------------
+# Plymouth's script plugin places this sprite centred. Mark on the left,
+# "ar0x" bitmap wordmark on the right, magenta underline. 320x80 is fixed by
+# ar0x.script (it centres using Image.GetWidth/GetHeight).
+mark = logo_overlay(12, 8, 64, rgb)
+mask, mw, mh = glyph_masks("ar0x", 7)      # 168 x 49
+word_x, word_y = 108, 16
 
 
 def logo_fn(x, y):
-    if oy <= y < oy + mh and ox <= x < ox + mw and (x - ox, y - oy) in mask:
-        return cyan
-    if oy + mh + 8 <= y < oy + mh + 11 and ox <= x < ox + mw:
-        return magenta if x < ox + mw // 3 else lerp(void, cyan, 0.35)
+    hit = mark(x, y)
+    if hit is not None:
+        return hit
+    if word_y <= y < word_y + mh and word_x <= x < word_x + mw:
+        if (x - word_x, y - word_y) in mask:
+            return text
+    if word_y + mh + 6 <= y < word_y + mh + 9 and word_x <= x < word_x + mw:
+        return magenta if x < word_x + 56 else lerp(void, cyan, 0.35)
     return void
 
 
@@ -180,7 +157,8 @@ for n in range(SEGMENTS + 1):
     write_png(os.path.join(OUT["plymouth"], f"progress-{n}.png"),
               400, 6, progress_fn)
 
-print("generated: 2 backgrounds + 1 logo + 21 progress frames")
+print("generated: 2 backgrounds + 1 logo lockup + 21 progress frames "
+      "(official Phase 7 logomark)")
 PY
 
 # --- Verify dimensions without external tools --------------------------------
@@ -193,7 +171,7 @@ expected = {
     "assets/plymouth/ar0x/logo.png": (320, 80),
 }
 for i in range(21):
-    expected[f"assets/plymouth/ar0x/progress-{i}.png"] = (400, 6)
+    expected["assets/plymouth/ar0x/progress-%d.png" % i] = (400, 6)
 for rel, want in expected.items():
     p = os.path.join(root, rel)
     with open(p, "rb") as fh:
@@ -203,3 +181,6 @@ for rel, want in expected.items():
     assert (w, h) == want, f"{rel}: {w}x{h} != {want}"
 print(f"verified {len(expected)} PNG files (signature + dimensions)")
 PY
+
+ok "Phase 7 final boot artwork generated (SVG-derived logomark, deterministic)"
+printf '\nNext: ./tools/build-kernel.sh --sync  (propagates to the archiso profile)\n'

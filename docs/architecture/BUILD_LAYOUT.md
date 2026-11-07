@@ -115,14 +115,16 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │           ├── hypr/ , waybar/ , gtk-3.0/ , gtk-4.0/
 │   │           ├── qt5ct/ , qt6ct/ , fontconfig/conf.d/
 │   │           ├── kitty/ , wofi/ , mako/ , mimeapps.list
-│   ├── branding/                               # Phase 7 — full target paths in file headers
-│   │   ├── os-release                          # → /etc/os-release
-│   │   ├── lsb-release                         # → /etc/lsb-release
-│   │   ├── issue                               # → /etc/issue
-│   │   ├── motd                                # → /etc/motd
-│   │   ├── palette.conf                        # source of truth for all theme colors
+│   ├── branding/                               # Phase 7 ✅ CANONICAL identity
+│   │   ├── os-release , lsb-release            # → /etc/** AND /usr/lib/os-release
+│   │   ├── issue , issue.net , motd            # → /etc/**
+│   │   ├── palette.conf                        # 8 hex pins, parity with versions.env
+│   │   ├── ascii/ar0x-ascii.txt                # plain (neofetch / motd)
+│   │   ├── ascii/ar0x-fastfetch.txt            # $1..$9 tagged (fastfetch)
+│   │   ├── ascii/ar0x-screenfetch.sh           # SOURCED by screenfetch -a
 │   │   ├── fastfetch/config.jsonc              # → /etc/skel/.config/fastfetch/
-│   │   └── ascii/ar0x-ascii.txt                # fastfetch/neofetch/screenfetch logo
+│   │   ├── neofetch/config.conf                # → /etc/skel/.config/neofetch/
+│   │   └── screenfetch/ar0x-screenfetch.sh     # → /usr/local/bin/ar0x-screenfetch
 │   ├── calamares/                              # Phase 10
 │   │   ├── settings.conf                       # → /etc/calamares/settings.conf
 │   │   ├── branding/ar0x/branding.desc         # → /usr/share/calamares/branding/ar0x/
@@ -154,14 +156,17 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── syslinux/{syslinux.cfg,splash.png}      # BIOS isolinux (Phase 4 brands it)
 │   └── boot/                                    # kernel + initramfs staged by mkarchiso
 │
-├── assets/                                     # Phase 6/7 — source artwork
-│   ├── logo/ar0x-logo.svg , ar0x-logo-mono.svg , LOGO_SPEC.md
+├── assets/                                     # Phase 6/7 ✅ — source artwork
+│   ├── logo/{ar0x-logo.svg,ar0x-logo-mono.svg,ar0x-wordmark.svg,LICENSE}
+│   ├── logo/ar0x-logo-{256,512}.png            # GENERATED (gen-branding-assets.sh)
 │   ├── wallpapers/{ar0x-neon-grid.png,ar0x-void.png,ar0x-circuit.png,PLACEHOLDERS.md}
-│   ├── plymouth/ar0x/{ar0x.plymouth,ar0x.script,*.png}
-│   ├── grub-theme/ar0x/{theme.txt,background.png,*.png}
-│   ├── sddm/ar0x/{Main.qml,theme.conf,background.png}
-│   ├── icons/ , cursors/
-│   └── ascii/ar0x-ascii.txt
+│   ├── plymouth/ar0x/{ar0x.plymouth,ar0x.script,logo.png,progress-0..20.png}
+│   ├── grub-theme/ar0x/{theme.txt,background.png}
+│   ├── sddm/ar0x/{Main.qml,metadata.desktop,theme.conf,background.png}
+│   ├── syslinux/splash.png
+│   ├── icons/{ar0x-logo.svg,README.md}
+│   ├── cursors/ar0x-cursors/{index.theme,cursor.theme,README.md}  # TEXT canonical only
+│   └── ascii/README.md                         # canonical art is in config/branding/
 │
 ├── packages/                                   # Phase 8 — PKGBUILDs
 │   ├── ar0x-welcome/{PKGBUILD,ar0x-welcome.py,ar0x-welcome.desktop,ar0x-firstboot.service}
@@ -174,6 +179,7 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   └── ar0x-meta/PKGBUILD
 │
 ├── tools/                                      # ALL scripts: #!/bin/bash + set -euo pipefail
+│                                                # (SOURCED snippets are exempt: see §6)
 │   ├── lib/common.sh                            # shared logging, die(), require_root(), colours
 │   ├── validate-versions.sh                     # Phase 1 — structural + version sanity check
 │   ├── setup-build-env.sh                       # Phase 2
@@ -183,6 +189,10 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── configure-system.sh                      # Phase 5 — --check/--sync/--apply
 │   ├── gen-desktop-assets.sh                    # Phase 6 — deterministic 4K PNGs
 │   ├── configure-desktop.sh                     # Phase 6 — --check/--sync/--apply
+│   ├── lib/ar0x_logo.py                         # Phase 7 — SVG geometry + palette + PNG
+│   ├── lib/ar0x_xcursor.py                      # Phase 7 — Xcur writer + self-verifier
+│   ├── gen-branding-assets.sh                   # Phase 7 — logo PNGs + XCursor theme
+│   ├── configure-branding.sh                    # Phase 7 — --check/--sync/--apply
 │   ├── setup-repo.sh                            # Phase 9
 │   ├── build-iso.sh                             # Phase 11 — master orchestrator
 │   ├── checksum.sh                              # Phase 11
@@ -267,10 +277,19 @@ logic other than the three explicit renames below:
 | `config/desktop/<tool>/**` | `config/desktop/skel/.config/<tool>/**` (GENERATED by `--sync`) |
 | `assets/sddm/ar0x/{Main.qml,metadata.desktop,theme.conf,background.png}` | `/usr/share/sddm/themes/ar0x/**` |
 | `assets/wallpapers/ar0x-{neon-grid,void,circuit}.png` | `/usr/share/backgrounds/ar0x/**` |
-| `config/branding/os-release` | `/etc/os-release` |
+| `config/branding/os-release` | `/etc/os-release` **and** `/usr/lib/os-release` |
 | `config/branding/lsb-release` | `/etc/lsb-release` |
 | `config/branding/issue` | `/etc/issue` |
+| `config/branding/issue.net` | `/etc/issue.net` |
 | `config/branding/motd` | `/etc/motd` |
+| `config/branding/palette.conf` | `/usr/share/ar0x/palette.conf` |
+| `config/branding/ascii/**` | `/usr/share/ar0x/branding/**` |
+| `config/branding/{fastfetch,neofetch}/**` | `/etc/skel/.config/{fastfetch,neofetch}/**` (GENERATED) |
+| `config/branding/screenfetch/ar0x-screenfetch.sh` | `/usr/local/bin/ar0x-screenfetch` (`0755`) |
+| `assets/logo/*.svg` + `LICENSE` | `/usr/share/ar0x/logo/**` |
+| `assets/icons/ar0x-logo.svg` | `/usr/share/icons/hicolor/scalable/apps/ar0x-logo.svg` (`LOGO=ar0x-logo`) |
+| `assets/cursors/ar0x-cursors/{index,cursor}.theme` | `/usr/share/icons/ar0x-cursors/{index,cursor}.theme` (text metadata only) |
+| `tools/gen-branding-assets.sh` output | `/usr/share/icons/ar0x-cursors/cursors/*` — 5 generated Xcursor binaries + 12 alias symlinks written DIRECTLY into the tracked `archiso/airootfs` profile (there is no second binary copy under `assets/`) |
 | `config/desktop/hypr/hyprland.lua` | `/etc/skel/.config/hypr/hyprland.lua` ⚠️ Lua |
 | `config/calamares/settings.conf` | `/etc/calamares/settings.conf` |
 | `config/calamares/branding/ar0x/**` | `/usr/share/calamares/branding/ar0x/**` |
@@ -284,8 +303,16 @@ logic other than the three explicit renames below:
 `/etc/NetworkManager/conf.d/10-ar0x.conf` lives at
 `config/system/NetworkManager/conf.d/10-ar0x.conf`; one that must appear at
 `/etc/sddm.conf.d/10-ar0x.conf` lives at
-`config/desktop/etc/sddm.conf.d/10-ar0x.conf`. Every Phase 5/6 config header
-states the full destination path so nothing is ambiguous.
+`config/desktop/etc/sddm.conf.d/10-ar0x.conf`. Every Phase 5/6/7 config header
+states the full destination path so nothing is ambiguous. Phase 7 ADDED a
+**second** mapping rule: anything under `config/branding/**` and
+`assets/{logo,icons}/**` is CANONICAL, and
+`tools/configure-branding.sh --sync` writes byte-identical mirrors into
+`archiso/airootfs/**` and `config/desktop/skel/.config/**`. `--check`
+`cmp -s` every pair; `validate-versions.sh` re-checks the `/etc` pairs. The
+Xcursor BINARIES are the one exception: `tools/gen-branding-assets.sh` writes
+them directly into `archiso/airootfs/usr/share/icons/ar0x-cursors/cursors/`
+(single binary copy), and `--check` parses them back rather than comparing bytes.
 
 ---
 

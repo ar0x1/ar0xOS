@@ -1,0 +1,14 @@
+        .--------------------------------.
+       /    /\        .--------------.    \
+      /    /  \       |  >_  ar0x   |     \
+     |    / /\ \      '--------------' []  |
+     |    \ \/ /                          |
+     |     \  /    N E O N   R O O T      |
+      \     \/     0 . 1 . 0  /  x86_64  /
+       '--------------------------------'
+       ar0x 0.1.0 "Neon Root"  /  Developer Edition
+       Arch + systemd + Hyprland + Wayland + linux-lts 6.18.59-1
+
+       Docs    https://github.com/ar0x1/ar0xOS
+       Issues  https://github.com/ar0x1/ar0xOS/issues
+       Run `ar0x-info` for system details or `fastfetch` for the branded logo.

@@ -1,12 +1,20 @@
-// /etc/skel/.config/fastfetch/config.jsonc
-// Phase 7 replaces the ASCII logo with the official ar0x logo and fills in
-// os-release/issue/motd. This is a working placeholder so fastfetch runs on
-// the Phase 6 ISO without a missing-file error.
+// /etc/skel/.config/fastfetch/config.jsonc  (CANONICAL: config/branding/fastfetch/)
+// ---------------------------------------------------------------------------
+// Phase 7 REPLACED the Phase 6 builtin "arch" logo with the official ar0x mark.
+// `"type": "file"` expands $1..$9 in ar0x-fastfetch.txt using logo.color;
+// `"file-raw"` would print those placeholders literally. Verified against
+// fastfetch dev src/logo/ascii/a/*.txt (builtin logos use $1..$9 exactly).
+// The absolute /usr/share path is intentional: /etc/skel is copied into every
+// new home, and a "~" source would break for root, the live user and Calamares.
+// ---------------------------------------------------------------------------
 {
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
-    "type": "builtin",
-    "source": "arch",
-    "color": { "1": "cyan", "2": "magenta" }
+    "type": "file",
+    "source": "/usr/share/ar0x/branding/ar0x-fastfetch.txt",
+    "color": { "1": "cyan", "2": "magenta", "3": "green" },
+    "padding": { "top": 0, "left": 1, "right": 3 },
+    "position": "left"
   },
   "display": {
     "separator": "  ──  ",
@@ -15,8 +23,12 @@
   },
   "modules": [
     { "type": "title", "key": "ar0x" },
-    "os", "kernel", "uptime", "packages", "shell",
+    "os", "host", "kernel", "uptime", "packages", "shell",
     "de", "wm", "wmtheme", "terminal", "cpu", "gpu",
-    "memory", "disk", "localip", "datetime"
+    "memory", "disk", "localip", "datetime",
+    {
+      "type": "custom",
+      "format": "  {#5}ar0x 0.1.0  ──  Neon Root  ──  github.com/ar0x1/ar0xOS"
+    }
   ]
 }

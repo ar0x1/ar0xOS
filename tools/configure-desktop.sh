@@ -18,8 +18,9 @@
 # ⚠️ RISK-002: Hyprland 0.57 REMOVED hyprland.conf. Lua is MANDATORY, there is
 #    NO converter, and `hyprctl keyword` is disabled. --check fails on any file
 #    named hyprland.conf anywhere in the source tree.
-# ⚠️ RISK-040: Adwaita cursor + generated PNG wallpapers are PLACEHOLDERS.
-#    Phase 7 replaces them with the official ar0x hyprcursor theme / final art.
+# ⚠️ RISK-040 CLOSED in Phase 7: `ar0x-cursors` is a real generated XCursor
+#    theme and XCURSOR_THEME points at it. The generated PNG wallpapers are
+#    KEPT as the deliberate v0.1 art (ADR-022). See docs/BRANDING_GUIDE.md.
 # ⚠️ This sandbox has no Hyprland, SDDM greeter, QEMU/KVM, root or display, so
 #    NO live desktop session was rendered here. See docs/DESKTOP_GUIDE.md §8.
 # -----------------------------------------------------------------------------
@@ -420,7 +421,7 @@ PY
 
     # Expected, non-fatal environment warnings.
     warn "Hyprland --verify-config, sddm-greeter --test-mode and a real Wayland session need an Arch host + display (MANUAL)."
-    warn "RISK-040: Adwaita cursor and generated PNG wallpapers are placeholders; Phase 7 ships the final ar0x art."
+    warn "RISK-040 CLOSED in Phase 7: real ar0x-cursors XCursor theme shipped; generated wallpapers kept as v0.1 art (ADR-022)."
 }
 
 # --- Section 4: --apply (root, manual) ---------------------------------------

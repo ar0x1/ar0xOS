@@ -1,20 +1,23 @@
 # /home/user/ar0xOS/assets/plymouth/ar0x/ar0x.script
 # Target: /usr/share/plymouth/themes/ar0x/ar0x.script
 # -----------------------------------------------------------------------------
-# PHASE 4 — Plymouth script-plugin splash.
+# PHASE 4 created the script; PHASE 7 replaced the placeholder art.
+# PHASE 7 — Plymouth script-plugin splash (final branded art).
 #
 # Palette (ADR-015): void #07090F -> (0.027,0.035,0.059),
 #                    surface #11151F -> (0.067,0.082,0.122).
-# Images are generated deterministically by tools/gen-theme-assets.sh:
-#   logo.png          320x80   "ar0x" cyan wordmark + magenta underline
-#   progress-0..20   400x6    20-segment boot progress bar
+# Images are generated deterministically by tools/gen-theme-assets.sh from
+# the OFFICIAL SVG geometry in tools/lib/ar0x_logo.py (ADR-015 palette):
+#   logo.png          320x80   cyan logomark + "ar0x" wordmark + magenta rule
+#   progress-0..20   400x6    20-segment cyan/text boot progress bar
 #
 # ⚠️ LIMITATION: this script has NO message renderer (no label plugin in the
 #    initramfs). Boot-time prompts such as a LUKS passphrase fall back to the
 #    `details` text theme. v0.1 ships unencrypted ext4 by default (Phase 10),
 #    so this is acceptable. For LUKS, use:
 #      plymouth-set-default-theme -R details
-#    or boot the "failsafe" GRUB entry. Phase 7 adds the final branded art.
+#    or boot the "failsafe" GRUB entry. Phase 7 shipped the final art but
+#    kept this limitation: adding a label plugin would grow the initramfs.
 # -----------------------------------------------------------------------------
 
 Window.SetBackgroundTopColor (0.027, 0.035, 0.059);

@@ -1,0 +1,6 @@
+# /usr/share/icons/ar0x-cursors/cursor.theme
+# Legacy XCursor lookup file (older toolkits read this instead of index.theme).
+[Icon Theme]
+Name=ar0x Cursors
+Comment=ar0x 0.1.0 "Neon Root" cyan/magenta/lime cursor set
+Inherits=Adwaita
