@@ -1,0 +1,55 @@
+# /home/user/ar0xOS/packages/ar0x-theme/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 9 — reference theme payload + applier (ADR-024 ONE OWNER PER PATH).
+# ⚠️ This package installs ONLY under /usr/share/ar0x/theme/** and /usr/bin.
+# It MUST NOT install into /etc/skel/**: the Phase 6 airootfs overlay already
+# owns those paths on the ISO, and a second owner would cause
+# `pacman: conflicting files` during a Calamares install.
+# All eight sources are byte-identical mirrors of config/desktop/<tool>/**.
+# -----------------------------------------------------------------------------
+pkgname=ar0x-theme
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ar0x cyberpunk reference theme (GTK3/GTK4, Qt5/Qt6, fontconfig) + user applier"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=('bash' 'coreutils')
+optdepends=(
+    'gtk3: GTK3 rendering of settings.ini and gtk.css'
+    'gtk4: GTK4 rendering of settings.ini and gtk.css'
+    'qt5ct: Qt5 theme selection'
+    'qt6ct: Qt6 theme selection'
+    'inter-font: display typeface referenced by fontconfig'
+)
+source=(
+    'gtk-3.0/settings.ini'
+    'gtk-3.0/gtk.css'
+    'gtk-4.0/settings.ini'
+    'gtk-4.0/gtk.css'
+    'qt5ct/qt5ct.conf'
+    'qt6ct/qt6ct.conf'
+    'fontconfig/99-ar0x-fonts.conf'
+    'ar0x-apply-theme'
+)
+sha256sums=(
+    '26995e50955bbcc12b58624986ebc61d2d0526799e92a58f7e0aaa3de2b5569e'
+    '095df4ee0b0897d0a77cb162d46e25d5cca449adeb75c4726bd201514f1662e9'
+    '643e37acab3d5d53836343c38d888583bddb31c16cf01651f494fd2985e43b13'
+    '1bd77fa2375b7f6e02e1f4c5a03254851349576aefcb5c7cb82a946ee47a6142'
+    'e968f253daa5c1b66177122ac50283912007d9844e54295bb9ae1d9cb99fed5a'
+    '03191760bbe73c4162db3c7bd950938df0bbc0affb3727391d90017f24ffb76b'
+    '4a4e01edd1346e3b917d38f8b1e47a4f1e4c519229eae55bcf65f3f6cb3a864d'
+    'c67c0388c547e1baa736e264fe4bf4c6fc6efb31b8170cfe18d785f34558e471'
+)
+
+package() {
+    install -Dm0644 "$srcdir/gtk-3.0/settings.ini" "$pkgdir/usr/share/ar0x/theme/gtk-3.0/settings.ini"
+    install -Dm0644 "$srcdir/gtk-3.0/gtk.css" "$pkgdir/usr/share/ar0x/theme/gtk-3.0/gtk.css"
+    install -Dm0644 "$srcdir/gtk-4.0/settings.ini" "$pkgdir/usr/share/ar0x/theme/gtk-4.0/settings.ini"
+    install -Dm0644 "$srcdir/gtk-4.0/gtk.css" "$pkgdir/usr/share/ar0x/theme/gtk-4.0/gtk.css"
+    install -Dm0644 "$srcdir/qt5ct/qt5ct.conf" "$pkgdir/usr/share/ar0x/theme/qt5ct/qt5ct.conf"
+    install -Dm0644 "$srcdir/qt6ct/qt6ct.conf" "$pkgdir/usr/share/ar0x/theme/qt6ct/qt6ct.conf"
+    install -Dm0644 "$srcdir/fontconfig/99-ar0x-fonts.conf" "$pkgdir/usr/share/ar0x/theme/fontconfig/99-ar0x-fonts.conf"
+    install -Dm755 "$srcdir/ar0x-apply-theme" "$pkgdir/usr/bin/ar0x-apply-theme"
+}

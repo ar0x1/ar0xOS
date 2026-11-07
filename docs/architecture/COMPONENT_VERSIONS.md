@@ -1,7 +1,7 @@
 # ar0x — Component & Version Matrix
 
 > Phase 1 companion to [`PROJECT_PLAN.md`](../../PROJECT_PLAN.md).
-> **Verified 2026-11-03** (Phase 8 additions verified 2026-11-07). Authoritative version list for Phases 2–12.
+> **Verified 2026-11-03** (Phase 8 + Phase 9 additions verified 2026-11-07). Authoritative version list for Phases 2–12.
 > Machine-readable equivalent: [`/home/user/ar0xOS/config/versions.env`](../../config/versions.env).
 
 ---
@@ -309,10 +309,35 @@ Full detail, installed paths and the exact style rules: `docs/BRANDING_GUIDE.md`
 | `AR0X_URL_*` | 5 RESERVED https endpoints (RISK-050) | `config/versions.env` + `config/tools/links.conf` | `--check` asserts byte-parity |
 | PKGBUILD checksums | 18 real SHA-256 (5 + 3 + 10) | 3 `PKGBUILD` files | `configure-tools.sh --sync` regenerates; `--check` verifies |
 
-⚠️ The three tool packages are `arch=('any')` with LOCAL `source=()` arrays;
+⚠️ All 8 packages are `arch=('any')` with LOCAL `source=()` arrays;
 no upstream tarball, no VCS source, no network and no AUR. They are therefore
 immune to the frozen `2026/11/01` snapshot drift (RISK-010). ⚠️ They were
 NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
+
+**Phase 9 repository matrix (all POLICY, no secrets):**
+
+| Component | Pin / value | Canonical source | Verification |
+|---|---|---|---|
+| `AR0X_REPO_NAME` / `_ARCH` | `ar0x` / `x86_64` | `config/repo/repo-options.conf` + `versions.env` | `ar0x_repo.validate_repo_options()` parity |
+| `AR0X_REPO_DB` / `_FILES_DB` | `ar0x.db.tar.zst` / `ar0x.files.tar.zst` | both above | `repo-add` creates BOTH + detached `.sig` |
+| `AR0X_REPO_SIGLEVEL` | `Required` (packages AND db, inherits `TrustedOnly`) | `repo-options.conf` | `UNSAFE_SIGLEVELS` gate; never `Optional`/`Never`/`TrustAll` |
+| `AR0X_REPO_SIGN_PACKAGES` / `_INCLUDE_SIGS` / `_VERIFY_EXISTING` | `yes` / `yes` / `yes` | `repo-options.conf` | `gpg --detach-sign` ×8, `repo-add --include-sigs -v` |
+| `AR0X_REPO_REMOVE_OLD` / `_KEEP_OLD` | `0` / `3` | `repo-options.conf` + `versions.env` | `0` preserves `ar0x-update --rollback` |
+| `AR0X_REPO_SERVER` | `https://repo.ar0x.dev/$arch` (RESERVED) | `repo-options.conf`, `versions.env`, 2 pacman configs | literal `\$arch` in sourced files (`set -u` safe); Python parsers normalise back |
+| `AR0X_REPO_KEY_{UID,ALGO,EXPIRE,FINGERPRINT_FILE,PUBLIC_KEY}` | `ar0x 0.1.0 Release Signing Key …` / `ed25519` / `2y` / `config/repo/RELEASE_KEY_FINGERPRINT` / `ar0x-public-key.asc` | `config/versions.env` | `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`; `ar0x-trusted` EMPTY (RISK-051) |
+| `AR0X_REPO_CI_{IMAGE,BUILDER}` | `archlinux:base-devel` / `builder` | `versions.env` + both CI workflows | `makepkg` refuses root → non-root `builder` |
+| 8 packages / checksums | `0.1.0-1` ×8; **57 `source` / 57 `sha256sums`** (56 real + 1 MANUAL `SKIP`) | `packages/*/PKGBUILD` | `setup-repo.sh --sync` regenerates; `ar0x_pkgbuild.py` verifies |
+| 31 mirrors | `config/desktop/**`, `assets/**`, `config/repo/pacman.conf.ar0x-entry` → `packages/ar0x-*/**` | `ar0x_repo.MIRRORS` | `validate_mirrors()` byte-parity |
+| `BUILD_ORDER` | `info, update, keyring, welcome, theme, wallpapers, hypr-config, meta` (meta LAST) | `ar0x_repo.BUILD_ORDER` | `validate_build_order()` checks intra-repo depends |
+
+**Phase 9 upstream facts used (verified 2026-11-07):**
+
+| API / behaviour | Verified fact | Source |
+|---|---|---|
+| `repo-add -s` | `gpg --detach-sign` on the db; `-k`/`GPGKEY` selects the key; `-v` verifies an EXISTING db sig before rewrite; `--include-sigs` embeds package `.sig`s; creates BOTH `*.db.tar.*` and `*.files.tar.*`. It does **NOT** create package signatures | `man.archlinux.org/man/repo-add.8.en` (pacman 7.1.0) |
+| `pacman-key --populate` | imports `<keyring>.gpg` from `/usr/share/pacman/keyrings`, reads `<keyring>-trusted` as 40-hex FPRs, lsigned + `--import-ownertrust`, then disables `<keyring>-revoked` keys; requires root + `--init` master key | `man.archlinux.org/man/pacman-key.8.en` + GitLab `pacman-key.sh.in` |
+| `SigLevel = Required` | signatures required on packages AND databases (unless `DatabaseOptional` overrides); untrusted/expired/revoked are fatal; `TrustedOnly` is the default | `pacman.conf(5)`, Arch Wiki |
+| `makepkg` in CI | refuses root; `archlinux:base-devel` needs `pacman -Sy base-devel git sudo`, `useradd builder`, `chown`, `sudo -u builder makepkg` | Arch CI guides / `dt-arch-repo` |
 
 **Phase 8 API facts used (verified 2026-11-07):**
 
@@ -358,22 +383,32 @@ NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
    `tools/lib/ar0x_logo.py`, ASCII `$N` parity, 5 XCursor files parsed back with
    12 aliases, `/etc` identity mirrors, `XCURSOR_THEME=ar0x-cursors`, and
    `screenfetch` present / `neofetch` absent in `packages.x86_64`.
-8. (Phase 8) Assert all 31 Phase 8 deliverables + 5 deferral READMEs;
-   `AR0X_TOOLS_VERSION == AR0X_VERSION`; `[ar0x] SigLevel = Required`;
-   `ConditionFirstBoot=yes`; then delegate to
-   `tools/lib/ar0x_pkgbuild.py` for 18/18 SHA-256 sums, 3 `package()` bodies,
-   3 `.desktop` files, 2 systemd units, 5 byte-identical mirrors, 1
-   derivation-only `fastfetch.jsonc`, 5 URL pins, 8 CSS hex pins, 4 groups /
-   23 official packages with zero AUR, lazy `gi`, zero `shell=True`,
-   5 skeletons with zero premature PKGBUILDs, and zero `ar0x-*` packages in
-   `config/packages.x86_64` while `python`/`python-gobject`/`fakeroot` are present.
+8. (Phase 8) Assert all 31 Phase 8 deliverables; `AR0X_TOOLS_VERSION ==
+   AR0X_VERSION`; `[ar0x] SigLevel = Required`; `ConditionFirstBoot=yes`;
+   then delegate to `tools/lib/ar0x_pkgbuild.py` for 57/57 SHA-256 sums,
+   8 `package()` bodies, 3 `.desktop` files, 2 systemd units, 5 URL pins,
+   8 CSS hex pins, 4 groups / 23 official packages with zero AUR, lazy `gi`,
+   zero `shell=True`, `ADR-024: 0/8 overlay-owned paths`, and zero `ar0x-*`
+   packages in `config/packages.x86_64` (Phase 11 gate).
+9. (Phase 9) Assert all 14 `AR0X_REPO_*` version keys, all 30 Phase 9
+   deliverables, `repo-options.conf` ↔ `versions.env` parity (12 options),
+   `[ar0x]` entry ↔ `pacman.conf.installed` parity, `PENDING-KEYGEN` +
+   empty `ar0x-trusted`/`ar0x-revoked`, `ar0x-keyring.install` `--populate`,
+   the 8-package `BUILD_ORDER`, 31 byte-identical mirrors, 3 CI workflows
+   (PR-safe / non-root build / signing-only release), and no private-key
+   material or `SigLevel = Never` in any source file. Delegated to
+   `tools/lib/ar0x_repo.py`.
 
-`tools/configure-tools.sh --check` adds `bash -n` on the 4 extensionless Phase 8
-bash executables, the 3 PKGBUILDs, the SOURCED `ar0x-welcome.install` scriptlet
-and the driver itself, plus Python AST checks. `--self-test` RUNS all three
-tools offline from `build/tools-prefix/`. ⚠️ `makepkg`, `namcap`,
-`shellcheck`, `desktop-file-validate` and `systemd-analyze verify` remain
-manual gates on a real Arch host.
+`tools/setup-repo.sh --check` adds `bash -n` on all 8 PKGBUILDs, 2 `.install`
+scriptlets, 8 extensionless bash executables (including the 3 `ar0x-apply-*`
+helpers), Python AST checks, and a `git check-ignore` gate proving derived
+key/db artifacts cannot be committed. `--self-test` RUNS the 3 appliers into a
+temp HOME (verifying all 24 copied files + timestamped backups), exercises a
+mock signed repo with 3 negative cases, and re-runs the Phase 8 self-test chain.
+`--verify DIR` inspects a real repo tree via `ar0x_repo.repo_problems()`.
+⚠️ `makepkg`, `gpg`, `repo-add`, `pacman`, `namcap`, `shellcheck`,
+`desktop-file-validate` and `systemd-analyze verify` remain MANUAL gates on a
+real Arch host (RISK-048/049/051).
 
 On the real build host, Phase 3 additionally generates `packages.lock` from `pacman -Q` inside
 `$AR0X_WORK_DIR/x86_64/airootfs`. That lockfile, plus the frozen mirror date, is what makes

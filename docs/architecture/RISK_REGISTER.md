@@ -63,9 +63,10 @@
 | **RISK-045** | **LOW** | `assets/logo/ar0x-wordmark.svg` uses LIVE `<text>` in Inter; machines without Inter reflow or substitute the wordmark | Inter (`inter-font`) IS on the ISO; `BRANDING_GUIDE.md` §1.4 gives the exact Inkscape *Path → Object to Path* manual step for print/outlining | P7/P12 |
 | **RISK-046** | **LOW** | Deterministic PNG raster uses distance-to-segment (round joins) where the SVG polygon has mitre joins | SVG remains authoritative for all vector/print use; PNGs exist only for GRUB/Plymouth/syslinux/raster fallback; documented in `BRANDING_GUIDE.md` §1.9 | P7/P12 |
 | **RISK-047** | ⚠️ **HIGH** | GTK4 `ar0x-welcome` window was NEVER rendered: no GTK4, no PyGObject (`gi`), no display, no Wayland session, no QEMU/KVM and no root in this sandbox | `gi` is imported LAZILY so `--self-test` covers every pure-Python path headless; `ar0x_pkgbuild.py` validates the widget source structurally (AST, GTK4 version pin, zero `shell=True` calls, 8 CSS pins, 5 https links, 4 safe groups); `--firstboot` marker skip is tested without a GUI; **MANUAL Phase 8/11 gate**: boot the ISO, click every button, verify polkit agent + CSS palette | P8/P11 |
-| **RISK-048** | ⚠️ **HIGH** | The signed `[ar0x]` repository does not exist until Phase 9, so the three tool packages are SOURCE + PKGBUILD only — NOT installed on the live ISO; `ar0x-meta` / `ar0x-keyring` are not installable yet | `config/packages.x86_64` carries ONLY the runtime deps `python`, `python-gobject`, `fakeroot`; `ar0x_pkgbuild.py` FAILS if any `ar0x-*` package appears in the ISO list before Phase 9; `PROJECT_PLAN.md` acceptance criterion 7 is explicitly flagged as blocked; Phase 9 owns `gpg`, `repo-add -s`, CI and publication | P8/P9 |
-| **RISK-049** | **MEDIUM** | `makepkg`, `namcap`, `desktop-file-validate`, `systemd-analyze verify` and `shellcheck` are unavailable here — PKGBUILDs were NEVER built, only structurally validated | 3 PKGBUILDs pass `bash -n`; `ar0x_pkgbuild.py` verifies 18/18 REAL SHA-256 sums, `package()` installs every source, 3 `.desktop` files and 2 systemd units parse; `tools/configure-tools.sh --sync` refreshes sums; **MANUAL gate**: `AR0X_CONFIRM_BUILD=yes ./tools/configure-tools.sh --build` on a clean `archlinux:base-devel` host, then `namcap` + `shellcheck` | P8/P9 |
-| **RISK-050** | **LOW** | The five `AR0X_URL_*` link endpoints are RESERVED; `/tree/main/docs` resolves only AFTER the PR is merged | `links.conf` keeps URL pins in ONE place with `AR0X_URL_*` parity asserted by `--check`; all five are https; `Gtk.LinkButton` uses `gtk_show_uri` (no subprocess). **MANUAL Phase 12 gate**: `curl -IL` every endpoint and replace any dead one before tagging v0.1.0 | P8/P12 |
+| **RISK-048** | ⚠️ **HIGH** | **STILL OPEN after Phase 9**: the signed `[ar0x]` database was NOT built/published, so all 8 packages remain SOURCE + PKGBUILD only and `ar0x-meta` is not installable. `config/packages.x86_64` carries ZERO `ar0x-*` packages | Phase 9 shipped the complete tooling: `setup-repo.sh`, `ar0x_repo.py`, 3 CI workflows, `config/repo/**`, all 8 PKGBUILDs (57/57 sums), ADR-024. **MANUAL gates**: air-gapped `--keygen` → `--sync` → `--build` → `--sign` → `--verify` → Phase 12 `--publish`/DNS/TLS. `ar0x_pkgbuild.validate_iso_package_policy()` still FAILS if any `ar0x-*` appears in the ISO list before Phase 11; acceptance criterion 7 remains explicitly blocked | P8/P9 → P11/P12 |
+| **RISK-049** | **MEDIUM** | `makepkg`, `gpg`, `repo-add`, `pacman`, `namcap`, `desktop-file-validate`, `systemd-analyze verify` and `shellcheck` are unavailable here — **all 8** PKGBUILDs were NEVER built, only structurally validated | 8/8 PKGBUILDs pass `bash -n`; `ar0x_pkgbuild.py` verifies 57/57 sums (56 real + 1 MANUAL `SKIP`), `ADR-024: 0/8 overlay paths`, 3 `.desktop` files + 2 units; `setup-repo.sh --sync` refreshes all sums; `ar0x_repo.py --self-test` exercises a mock signed repo + 3 negative cases. **MANUAL gate**: `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on `archlinux:base-devel`, then `namcap` + `shellcheck` | P8/P9 |
+| **RISK-050** | **LOW** | The five `AR0X_URL_*` link endpoints AND `https://repo.ar0x.dev/$arch` are RESERVED; `/tree/main/docs` resolves only AFTER the PR is merged | `links.conf` keeps URL pins in ONE place with `AR0X_URL_*` parity asserted by `--check`; `repo-options.conf` / `pacman.conf.ar0x-entry` / `pacman.conf.installed` all use the same https `$arch` placeholder, asserted by `ar0x_repo.validate_repo_options()`. **MANUAL Phase 12 gate**: `curl -IL` every endpoint, provision DNS + TLS, replace any dead one before tagging v0.1.0 | P8/P9/P12 |
+| **RISK-051** | ⚠️ **CRITICAL** | Offline private GPG release key + CI signing secrets: leakage, an unprotected key, or a bad signature published to users is a **security incident** requiring key rotation, revocation and re-signing every package | `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`; `ar0x-trusted` is EMPTY so `SigLevel = Required` correctly refuses an unsigned repo; `ar0x-public-key.asc` is a MANUAL gitignored keygen artifact with `SKIP` checksum; `--keygen` uses `gpg --quick-generate-key` WITHOUT `--batch`/`--passphrase` so gpg-agent demands a real passphrase, `GNUPGHOME` is `0700` under `/opt/ar0x-build/keys`; `validate-packages.yml` + `build-packages.yml` run on forked PRs with **ZERO secrets**; `release.yml` has NO `pull_request` trigger + an explicit fork guard + a protected `release` Environment; `ar0x_repo.validate_workflows()` and `validate_no_secrets()` assert all of this; `ar0x-revoked` is the revocation path. **MANUAL**: air-gapped keygen, fingerprint publication, key rotation | You, P9/P12 |
 
 ---
 
@@ -82,7 +83,7 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 6 | ⚠️ **RISK-043** (no live desktop QA), **RISK-002** (Lua-only), RISK-038, RISK-039, RISK-041, RISK-042, RISK-009; RISK-040 CLOSED in P7 |
 | 7 | ⚠️ **RISK-044** (no live art render), RISK-045 (live SVG text), RISK-046 (raster joins), **RISK-040 CLOSED**; `configure-branding.sh --apply` is ROOT-only, rebuilds initramfs + `grub.cfg`, and has NO automatic rollback |
 | 8 | ⚠️ **RISK-047** (GTK4 never rendered), **RISK-048** (no signed repo yet), RISK-049 (no `makepkg`/`namcap`), **RISK-013** (NOPASSWD guard), RISK-008 (AppArmor opt-in), RISK-020, RISK-042, RISK-050; `configure-tools.sh --build` is MANUAL and RISKY |
-| 9 | ⚠️ **RISK-003** (Codeberg), RISK-011 (key custody) |
+| 9 | ⚠️ **RISK-051** (CRITICAL: private release key NEVER on a PR workflow), **RISK-048** (no signed repo after P9 tooling), RISK-049 (no `makepkg`/`gpg`/`repo-add`), RISK-003 (Codeberg), RISK-011 (key custody), RISK-050 (reserved `repo.ar0x.dev`) |
 | 10 | ⚠️ **RISK-004** (destructive partitioning), RISK-013 |
 | 11 | ⚠️ **RISK-004**, RISK-005, RISK-007, RISK-009, RISK-012, RISK-015 |
 | 12 | RISK-015 |
@@ -111,8 +112,20 @@ These exact warnings will be repeated at the start of the corresponding phase re
     `Required` to make an unsigned repo work.
 13. **Never** ship a target system with a surviving `NOPASSWD` sudoers rule —
     `/usr/lib/ar0x/ar0x-firstboot` fails loudly (RISK-013).
-14. **Never** put a PKGBUILD under the five Phase 9 skeletons before the ONE-OWNER-PER-PATH
-    audit (ADR-023); it would collide with the `/etc/skel/**` airootfs overlay.
+14. **Never** let a PKGBUILD own an airootfs-overlay path (`/etc/skel/**` or the
+    Phase 6/7 `/usr/share/**` trees). ADR-024 resolved ADR-023: all 8 packages now
+    have PKGBUILDs, but ONLY into `/usr/share/ar0x/<pkg>/**`, `/usr/share/pacman/keyrings/**`,
+    `/usr/share/doc/ar0x-*/**` and `/usr/bin/ar0x-apply-*`. `validate_ownership()` fails the build.
+15. **Never** put a private GPG key, passphrase or `*.gpg`/`*.asc`/`*.key` artifact in Git,
+    in `assets/`, or in a GitHub Actions secret available to a `pull_request` workflow
+    from a fork (RISK-051). `release.yml` is the ONLY signing workflow.
+16. **Never** weaken installed `[ar0x] SigLevel` below `Required` — not to `Optional`,
+    `Never`, `TrustAll`, `DatabaseOptional` or `PackageOptional`. `Optional TrustAll`
+    is **build-only** (`config/pacman.conf.build`, RISK-006).
+17. **Never** rely on `repo-add -s` to create package signatures: run `makepkg --sign`
+    or `gpg --detach-sign` for EVERY tarball first (`repo-add --include-sigs` embeds them).
+18. **Never** run `makepkg` as root, or use `makepkg -s` without `--nodeps` for these 8
+    packages — their intra-repo depends do not exist until the build job finishes.
 
 ---
 
@@ -127,8 +140,11 @@ v0.1 is a **developer preview**. The residual risks accepted at release are:
 - AppArmor policies are minimal; most processes remain unconfined.
 - The GTK4 welcome window has had NO live render QA (RISK-047); only headless
   structural + self-test coverage exists.
-- `ar0x-meta` is not installable until Phase 9 publishes the signed `[ar0x]`
-  repo (RISK-048), and no PKGBUILD has been built with `makepkg` (RISK-049).
+- `ar0x-meta` is STILL not installable: Phase 9 delivered all 8 PKGBUILDs and the
+  signing/CI tooling, but the offline key is `PENDING-KEYGEN` and no signed
+  `[ar0x]` repository has been built or published (RISK-048/051).
+- No PKGBUILD has been built with `makepkg`; no `gpg`, `repo-add`, `pacman-key --populate`
+  or `pacman -S ar0x-meta` has run (RISK-049).
 - `ar0x-update --upgrade` has NO automatic rollback; `--rollback` can only reach
   versions still present in `/var/cache/pacman/pkg/`.
 

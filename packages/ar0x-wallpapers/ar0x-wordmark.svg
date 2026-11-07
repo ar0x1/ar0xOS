@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- /home/user/ar0xOS/assets/logo/ar0x-wordmark.svg
+     HORIZONTAL LOCKUP — 1024x256 viewBox. Mark is the 512 geometry at 0.4375
+     scale (224px), translated to (16,16). Clear space = 1/8 mark width = 28px.
+     NOTE: <text> is LIVE text and requires Inter (package `inter-font`, already
+     on the ISO). For print or external distribution, convert the two <text>
+     nodes to outlines in Inkscape; the SVG remains the master either way. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" width="1024" height="256"
+     role="img" aria-labelledby="ar0x-wordmark-title">
+  <title id="ar0x-wordmark-title">ar0x wordmark — Neon Root</title>
+  <g transform="translate(16,16) scale(0.4375)">
+    <polygon points="136,24 376,24 488,136 488,376 376,488 136,488 24,376 24,136"
+             fill="none" stroke="#00E5FF" stroke-width="28" stroke-linejoin="miter"/>
+    <polyline points="150,170 238,256 150,342"
+              fill="none" stroke="#00E5FF" stroke-width="40"
+              stroke-linecap="butt" stroke-linejoin="miter"/>
+    <line x1="272" y1="342" x2="362" y2="342"
+          stroke="#FF2E88" stroke-width="40" stroke-linecap="butt"/>
+    <rect x="322" y="170" width="48" height="48" fill="#A8FF60"/>
+  </g>
+  <text x="272" y="158" fill="#D7E0EE"
+        font-family="Inter, sans-serif" font-size="132" font-weight="700"
+        letter-spacing="-4">ar0x</text>
+  <rect x="274" y="178" width="700" height="4" fill="#FF2E88"/>
+  <text x="276" y="222" fill="#6B7891"
+        font-family="Inter, sans-serif" font-size="30" font-weight="600"
+        letter-spacing="9">NEON ROOT  /  DEVELOPER EDITION</text>
+</svg>

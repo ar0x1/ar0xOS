@@ -1,0 +1,30 @@
+# /home/user/ar0xOS/packages/ar0x-meta/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 9 — meta-package. Acceptance criterion 7:
+#   `pacman -S ar0x-meta` works from the signed [ar0x] repo.
+# Installs NO binaries/configs of its own (just one doc file). Every dependency
+# is another ar0x package from the SAME repo, so `makepkg` MUST be run with
+# --nodeps (or after the local repo exists) — see ci/workflows/build-packages.yml.
+# -----------------------------------------------------------------------------
+pkgname=ar0x-meta
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ar0x 0.1.0 standard experience meta-package (7 signed ar0x packages)"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=(
+    'ar0x-info' 'ar0x-update' 'ar0x-welcome'
+    'ar0x-theme' 'ar0x-wallpapers' 'ar0x-hypr-config'
+    'ar0x-keyring'
+)
+source=(
+    'RELEASE'
+)
+sha256sums=(
+    '95427de919cc798c9c87905f8c4ddfbf6cfc07ebd9437b6dbd6af4bced918a92'
+)
+
+package() {
+    install -Dm644 "$srcdir/RELEASE" "$pkgdir/usr/share/doc/ar0x-meta/RELEASE"
+}

@@ -1,0 +1,73 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/bin/ar0x-apply-hypr-config — Phase 9 (ar0x-hypr-config package)
+# -----------------------------------------------------------------------------
+# Installs the Hyprland 0.57 LUA reference config into ONE user's
+# $HOME/.config/hypr. The ar0x ISO already ships the same files under
+# /etc/skel/.config/hypr from the Phase 6 overlay (ADR-024 one-owner-per-path).
+#
+# ⚠️ Lua ONLY: Hyprland 0.57 removed hyprland.conf. A stray .conf here would
+#    produce a blank session (RISK-002). No root, no network.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: paths --------------------------------------------------------
+REF_DIR="${AR0X_HYPR_REFDIR:-/usr/share/ar0x/hypr-config}"
+DEST_DIR="${AR0X_HYPR_DESTDIR:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr}"
+BACKUP_DIR="${DEST_DIR}/ar0x-backups/$(date -u +%Y%m%dT%H%M%SZ)"
+
+usage() {
+    cat <<'USAGE'
+ar0x-apply-hypr-config — install the ar0x Hyprland Lua config into your HOME.
+
+  (no option)   Copy hyprland.lua + 4 .conf + 10 lua/*.lua modules.
+  --list        Print the reference files and exit (no writes).
+  --help        This help.
+
+Overrides: AR0X_HYPR_REFDIR, AR0X_HYPR_DESTDIR.
+USAGE
+}
+
+# --- Section 2: option parsing -----------------------------------------------
+MODE='apply'
+while (( $# > 0 )); do
+    case "$1" in
+        --list) MODE='list' ;;
+        -h|--help) usage; exit 0 ;;
+        *) printf 'ar0x-apply-hypr-config: unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+    esac
+    shift
+done
+
+[[ -d "$REF_DIR" ]] || { printf 'ar0x-apply-hypr-config: reference tree missing: %s\n' "$REF_DIR" >&2; exit 1; }
+
+# --- Section 3: manifest -----------------------------------------------------
+FILES=(
+    hyprland.lua hyprpaper.conf hyprlock.conf hypridle.conf
+    lua/animations.lua lua/autostart.lua lua/env.lua lua/input.lua
+    lua/keybinds.lua lua/looknfeel.lua lua/monitors.lua lua/palette.lua
+    lua/programs.lua lua/rules.lua
+)
+for rel in "${FILES[@]}"; do
+    [[ "$rel" == *.lua || "$rel" == *.conf ]] || { printf 'unexpected file type: %s\n' "$rel" >&2; exit 1; }
+done
+if [[ "$MODE" == 'list' ]]; then
+    for rel in "${FILES[@]}"; do printf '%s\n' "$REF_DIR/$rel"; done
+    exit 0
+fi
+
+# --- Section 4: backup + copy ------------------------------------------------
+for rel in "${FILES[@]}"; do
+    src="$REF_DIR/$rel"; dst="$DEST_DIR/$rel"
+    [[ -f "$src" ]] || { printf 'ar0x-apply-hypr-config: missing: %s\n' "$src" >&2; exit 1; }
+    if [[ -e "$dst" ]]; then
+        mkdir -p -- "$BACKUP_DIR/$(dirname -- "$rel")"
+        cp -a -- "$dst" "$BACKUP_DIR/$rel"
+    fi
+    mkdir -p -- "$(dirname -- "$dst")"
+    cp -f -- "$src" "$dst"
+    printf '[ OK ] %s\n' "$dst"
+done
+printf 'ar0x-apply-hypr-config: done. Backup (if any): %s\n' "$BACKUP_DIR"
+printf 'Verify on a live session with: Hyprland --verify-config\n'

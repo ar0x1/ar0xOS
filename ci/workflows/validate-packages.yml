@@ -1,0 +1,71 @@
+# /home/user/ar0xOS/ci/workflows/validate-packages.yml
+# -----------------------------------------------------------------------------
+# PHASE 9 — PR-SAFE read-only validation. NO secrets, NO build, NO signing.
+# Runs on every push AND pull_request (including forks). This is the workflow
+# that protects the branch; signing happens ONLY in release.yml (RISK-051).
+# -----------------------------------------------------------------------------
+name: validate-packages
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: this job only reads the checkout.
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structural:
+    name: Structural + policy validation (no root, no network)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Shell syntax
+        run: |
+          set -euo pipefail
+          bash -n tools/*.sh tools/lib/*.sh
+          bash -n packages/*/PKGBUILD
+          bash -n packages/*/*.install
+
+      - name: Whole-repo validators
+        run: |
+          set -euo pipefail
+          ./tools/validate-versions.sh
+          ./tools/bootstrap.sh --check
+          ./tools/configure-system.sh --check
+          ./tools/configure-desktop.sh --check
+          ./tools/configure-branding.sh --check
+          ./tools/configure-tools.sh --check
+          ./tools/setup-repo.sh --check
+
+      - name: Phase 9 offline self-test (mock signed repo)
+        run: |
+          set -euo pipefail
+          python3 tools/lib/ar0x_repo.py "$PWD" --self-test
+          python3 tools/lib/ar0x_pkgbuild.py "$PWD"
+
+      - name: No private-key material in the tree
+        run: |
+          set -euo pipefail
+          # Match the FULL PEM delimiter. The validators legitimately use the
+          # bare words as grep PATTERNS, so a bare substring search false-positives.
+          if grep -rIlE --exclude='*.png' --exclude='*.svg' \
+              --exclude-dir='.git' --exclude-dir='build' \
+              -e '-----BEGIN [A-Z0-9 ]*PRIVATE KEY' .; then
+            echo "::error::private key material committed"; exit 1
+          fi
+          echo "[ OK ] no private-key material"

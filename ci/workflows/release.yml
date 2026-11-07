@@ -1,0 +1,138 @@
+# /home/user/ar0xOS/ci/workflows/release.yml
+# -----------------------------------------------------------------------------
+# PHASE 9 — SIGN + PUBLISH the [ar0x] repository.
+#
+# ⚠️ SECURITY CONTRACT (RISK-051): this workflow is NEVER triggered by
+#    pull_request. A private GPG key must NEVER be exposed to a workflow that
+#    runs on forked PRs. Only `workflow_dispatch` on a protected ref or a
+#    signed `v*` tag reaches the signing job below.
+#
+# Required repository secrets (Settings > Environments > release):
+#   AR0X_RELEASE_GPG_KEY  base64 of the ASCII-armored PRIVATE key (CI subkey)
+#   AR0X_GPG_PASSPHRASE   its passphrase
+#   AR0X_RELEASE_FPR      40-hex fingerprint of that key
+# ⚠️ The OFFLINE master release key lives in /opt/ar0x-build/keys, NOT here.
+# -----------------------------------------------------------------------------
+name: release-ar0x-repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Validate commands but do not publish'
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  sign-and-publish:
+    name: Sign packages + db, publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    # Explicit belt-and-braces guard: no fork PR can ever reach these secrets.
+    if: github.event_name != 'pull_request' && (github.event.pull_request == null || github.event.pull_request.head.repo.fork != true)
+    permissions:
+      contents: write
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    env:
+      GNUPGHOME: /tmp/ar0x-gnupg
+      AR0X_RELEASE_GPG_KEY: ${{ secrets.AR0X_RELEASE_GPG_KEY }}
+      AR0X_GPG_PASSPHRASE: ${{ secrets.AR0X_GPG_PASSPHRASE }}
+      AR0X_RELEASE_FPR: ${{ secrets.AR0X_RELEASE_FPR }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pacman tooling
+        run: |
+          set -euo pipefail
+          pacman-key --init
+          pacman -Syu --noconfirm --needed \
+            base-devel git gnupg pacman-contrib sudo github-cli
+
+      - name: Import the CI signing key into an ephemeral GNUPGHOME
+        run: |
+          set -euo pipefail
+          install -dm700 "$GNUPGHOME"
+          printf 'pinentry-mode loopback\n' > "$GNUPGHOME/gpg.conf"
+          printf 'allow-loopback-pinentry\n' > "$GNUPGHOME/gpg-agent.conf"
+          printf '%s' "$AR0X_RELEASE_GPG_KEY" | base64 -d | gpg --batch --import
+          gpg --batch --fingerprint "$AR0X_RELEASE_FPR"
+
+      - name: Build the 8 packages (non-root builder)
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed namcap shellcheck
+          useradd -m -s /bin/bash builder
+          printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE/build/repo/x86_64"
+          for pkg in ar0x-info ar0x-update ar0x-keyring ar0x-welcome \
+                     ar0x-theme ar0x-wallpapers ar0x-hypr-config ar0x-meta; do
+            ( cd "packages/$pkg" && sudo -u builder makepkg --nodeps --noconfirm --force )
+            cp -a "packages/$pkg"/*.pkg.tar.zst "$GITHUB_WORKSPACE/build/repo/x86_64/"
+          done
+
+      - name: Verify the release key fingerprint is out-of-band correct
+        run: |
+          set -euo pipefail
+          grep -Eq '^[0-9A-F]{40}$' <<< "$AR0X_RELEASE_FPR" \
+            || { echo "::error::AR0X_RELEASE_FPR is not 40 uppercase hex"; exit 1; }
+          pinned="$(grep -v '^[[:space:]]*#' \
+                    config/repo/RELEASE_KEY_FINGERPRINT | tail -1)"
+          # PENDING-KEYGEN means the offline keygen never ran: REFUSE to sign.
+          [[ "$pinned" == "$AR0X_RELEASE_FPR" ]] \
+            || { echo "::error::CI key != published fingerprint (RISK-051)"; exit 1; }
+          echo "[ OK ] CI signing key matches the committed fingerprint"
+
+      - name: Sign every package (detached, binary, non-interactive)
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/build/repo/x86_64"
+          for p in ./*.pkg.tar.zst; do
+            gpg --batch --yes --pinentry-mode loopback \
+                --passphrase "$AR0X_GPG_PASSPHRASE" \
+                --local-user "$AR0X_RELEASE_FPR" \
+                --output "$p.sig" --detach-sign "$p"
+          done
+
+      - name: Build + sign the repository database
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/build/repo/x86_64"
+          # -s signs the db; -v verifies any existing db.sig before rewriting;
+          # --include-sigs embeds package signatures in the db.
+          GPGKEY="$AR0X_RELEASE_FPR" \
+            repo-add -s -v --include-sigs ar0x.db.tar.zst ./*.pkg.tar.zst
+          test -f ar0x.db.tar.zst.sig
+          test -f ar0x.files.tar.zst.sig
+
+      - name: SHA256SUMS + detached signature
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/build/repo/x86_64"
+          sha256sum ./* > SHA256SUMS
+          gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$AR0X_GPG_PASSPHRASE" \
+              --local-user "$AR0X_RELEASE_FPR" \
+              --output SHA256SUMS.sig --detach-sign SHA256SUMS
+          "$GITHUB_WORKSPACE/tools/setup-repo.sh" --verify "$(pwd)"
+
+      - name: Publish to GitHub Releases (MANUAL for v0.1.0)
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" --title "ar0x $tag" --generate-notes \
+            "$GITHUB_WORKSPACE"/build/repo/x86_64/*

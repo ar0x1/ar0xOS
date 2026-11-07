@@ -47,6 +47,7 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── DESKTOP_GUIDE.md                        # Phase 6 — desktop + theme guide
 │   ├── BRANDING_GUIDE.md                       # Phase 7 — identity + art guide
 │   ├── TOOLS_GUIDE.md                          # Phase 8 — custom tools + packaging guide
+│   ├── REPO_GUIDE.md                           # Phase 9 — signed repo + CI + MANUAL gates
 │   ├── KERNEL_CONFIG_NOTES.md                  # Phase 4
 │   ├── INSTALLER_FLOW.md                       # Phase 10 — step-by-step Calamares test
 │   ├── TESTING_CHECKLIST.md                    # Phase 11
@@ -174,7 +175,7 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── cursors/ar0x-cursors/{index.theme,cursor.theme,README.md}  # TEXT canonical only
 │   └── ascii/README.md                         # canonical art is in config/branding/
 │
-├── packages/                                   # Phase 8 ✅ 3 built + 5 P9 skeletons
+├── packages/                                   # Phase 9 ✅ ALL 8 PKGBUILDs (57/57 sums)
 │   ├── README.md                               # ownership / deferral index
 │   ├── ar0x-info/                              # ✅ PKGBUILD, ar0x-info, *.desktop,
 │   │   │                                      #    fastfetch.jsonc, ar0x-*.txt, README.md
@@ -185,8 +186,10 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │   │                                      #    ar0x-{welcome,firstboot}.service,
 │   │   │                                      #    ar0x-firstboot, ar0x-apparmor-ctl,
 │   │   │                                      #    ar0x-welcome.install, README.md
-│   └── {ar0x-theme,ar0x-wallpapers,ar0x-hypr-config,
-│         ar0x-keyring,ar0x-meta}/README.md     # ⏳ Phase 9 — NO PKGBUILD yet (ADR-023)
+│   └── {ar0x-theme,ar0x-wallpapers,ar0x-hypr-config,   # ✅ Phase 9 (ADR-024)
+│         ar0x-keyring,ar0x-meta}/                       # PKGBUILD + README.md
+│       ├── ar0x-apply-{theme,hypr-config,wallpapers}   # user-space helpers
+│       └── ar0x-keyring/{ar0x-trusted,ar0x-revoked,ar0x-keyring.install}
 │
 ├── tools/                                      # ALL scripts: #!/bin/bash + set -euo pipefail
 │                                                # (SOURCED snippets are exempt: see §6)
@@ -203,15 +206,24 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── lib/ar0x_xcursor.py                      # Phase 7 — Xcur writer + self-verifier
 │   ├── gen-branding-assets.sh                   # Phase 7 — logo PNGs + XCursor theme
 │   ├── configure-branding.sh                    # Phase 7 — --check/--sync/--apply
-│   ├── lib/ar0x_pkgbuild.py                     # Phase 8 — pure-stdlib PKGBUILD validator
+│   ├── lib/ar0x_pkgbuild.py                     # Phase 8+9 — 8-package validator
+│   ├── lib/ar0x_repo.py                         # Phase 9 — repo policy/CI/secret validator
 │   ├── configure-tools.sh                       # Phase 8 — --check/--sync/--self-test/--build
-│   ├── setup-repo.sh                            # Phase 9
+│   ├── setup-repo.sh                            # Phase 9 — 8-mode repo driver
 │   ├── build-iso.sh                             # Phase 11 — master orchestrator
 │   ├── checksum.sh                              # Phase 11
 │   └── qemu-test.sh                             # Phase 11
 │
+├── config/repo/
+│   ├── repo-options.conf                        # Phase 9 — CANONICAL policy (12 opts)
+│   ├── pacman.conf.ar0x-entry                  # Phase 9 — 3 shipped data lines
+│   ├── RELEASE_KEY_FINGERPRINT                 # Phase 9 — PENDING-KEYGEN (MANUAL)
+│   └── README.md                               # Phase 9 — canonical-source table
 ├── ci/workflows/
-│   ├── build-packages.yml                       # Phase 9
+│   ├── validate-packages.yml                    # Phase 9 — PR-safe, ZERO secrets
+│   ├── build-packages.yml                       # Phase 9 — non-root makepkg x8
+│   ├── release.yml                              # Phase 9 — signing + publication
+│   ├── README.md                                # Phase 9 — CI security contract
 │   └── build-iso.yml                            # Phase 11 (optional)
 │
 ├── docker/                                     # Phase 2 — Docker option
@@ -341,11 +353,23 @@ installs a disposable prefix at `build/tools-prefix/` (gitignored). `--check`
 asserts 5 byte-identical pairs + the derivation-only difference via
 `tools/lib/ar0x_pkgbuild.py`. Full installed paths: `docs/TOOLS_GUIDE.md §7`.
 
-⚠️ **ONE OWNER PER PATH (ADR-023):** the three Phase 8 packages are NOT copied
-into `archiso/airootfs/**` and NOT listed in `config/packages.x86_64`. They will
-arrive from the signed `[ar0x]` repo in Phase 9. The five remaining packages are
-deferred because their `/etc/skel/**` paths are already owned by the Phase 6/7
-airootfs overlay — a second owner would cause `pacman: conflicting files`.
+**Phase 9 ADDS a fourth mapping rule (ADR-024):** `config/desktop/**`,
+`assets/**`, `config/repo/pacman.conf.ar0x-entry` and `config/branding/**` remain
+CANONICAL; `setup-repo.sh --sync` regenerates **31** byte-identical mirrors under
+`packages/ar0x-{theme,wallpapers,hypr-config,keyring}/` and refreshes ALL 8
+PKGBUILD `sha256sums` (57 entries). `ar0x_repo.validate_mirrors()` asserts every
+pair; `--sync` stages a disposable `build/repo-prefix/` for `--self-test`.
+
+⚠️ **ONE OWNER PER PATH (ADR-024, resolves ADR-023):** the airootfs overlay
+exclusively owns its **92** ISO paths under `/etc/skel/**` and the Phase 6/7
+`/usr/share/**` trees. All 8 packages install ONLY into `/usr/share/ar0x/<pkg>/**`,
+`/usr/share/pacman/keyrings/ar0x*`, `/usr/share/doc/ar0x-*/**` and
+`/usr/bin/ar0x-apply-*`. `ar0x_pkgbuild.validate_ownership()` proves `0/8`
+PKGBUILDs touch an overlay path — otherwise `pacman: conflicting files` would
+break Calamares. The three `ar0x-apply-*` helpers copy the package-private
+reference trees into ONE user's XDG dirs (timestamped backups, no root).
+**ZERO `ar0x-*` packages are listed in `config/packages.x86_64`** (Phase 11 gate);
+they will arrive from the signed `[ar0x]` repo, which is still a MANUAL gate.
 
 ---
 

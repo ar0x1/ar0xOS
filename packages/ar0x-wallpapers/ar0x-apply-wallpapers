@@ -1,0 +1,61 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/bin/ar0x-apply-wallpapers — Phase 9 (ar0x-wallpapers package)
+# -----------------------------------------------------------------------------
+# Copies the three 4K wallpapers into the USER's Pictures directory. On the
+# ar0x ISO the same PNGs are owned by the Phase 7 overlay at
+# /usr/share/backgrounds/ar0x/**; this package MUST NOT install there or
+# pacman would report "conflicting files" (ADR-024 one-owner-per-path).
+#
+# No root, no network, no writes outside $HOME.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: paths --------------------------------------------------------
+REF_DIR="${AR0X_WALL_REFDIR:-/usr/share/ar0x/wallpapers}"
+DEST_DIR="${AR0X_WALL_DESTDIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/ar0x}"
+FILES=(ar0x-neon-grid.png ar0x-void.png ar0x-circuit.png)
+
+usage() {
+    cat <<'USAGE'
+ar0x-apply-wallpapers — copy the 3 ar0x 4K wallpapers into your Pictures dir.
+
+  (no option)   Copy (skip files that are already identical).
+  --list        Print the reference files and exit (no writes).
+  --help        This help.
+
+Overrides: AR0X_WALL_REFDIR, AR0X_WALL_DESTDIR.
+USAGE
+}
+
+# --- Section 2: option parsing -----------------------------------------------
+MODE='apply'
+while (( $# > 0 )); do
+    case "$1" in
+        --list) MODE='list' ;;
+        -h|--help) usage; exit 0 ;;
+        *) printf 'ar0x-apply-wallpapers: unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+    esac
+    shift
+done
+
+[[ -d "$REF_DIR" ]] || { printf 'ar0x-apply-wallpapers: reference tree missing: %s\n' "$REF_DIR" >&2; exit 1; }
+if [[ "$MODE" == 'list' ]]; then
+    for f in "${FILES[@]}"; do printf '%s\n' "$REF_DIR/$f"; done
+    exit 0
+fi
+
+# --- Section 3: idempotent copy ----------------------------------------------
+mkdir -p -- "$DEST_DIR"
+for f in "${FILES[@]}"; do
+    src="$REF_DIR/$f"; dst="$DEST_DIR/$f"
+    [[ -f "$src" ]] || { printf 'ar0x-apply-wallpapers: missing: %s\n' "$src" >&2; exit 1; }
+    if [[ -f "$dst" ]] && cmp -s -- "$src" "$dst"; then
+        printf '[ .. ] unchanged %s\n' "$dst"
+    else
+        cp -f -- "$src" "$dst"
+        printf '[ OK ] %s\n' "$dst"
+    fi
+done
+printf 'ar0x-apply-wallpapers: done. Point hyprpaper at %s\n' "$DEST_DIR"

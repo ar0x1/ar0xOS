@@ -624,6 +624,76 @@ sums); MEDIUM for the welcome app (replace GTK4 with libadwaita/Qt6 and re-do
 the two units); MEDIUM for the 5 deferred packages (one-owner-per-path audit
 then 5 new PKGBUILDs).
 
+## ADR-024 — ONE OWNER PER PATH + PR-safe signed repository (Phase 9)
+
+**Status:** ACCEPTED (2026-11-07). **Resolves** ADR-023's five deferred packages.
+**Supersedes** the "5 skeletons, NO PKGBUILD until the ownership audit" decision;
+it does NOT change ADR-017/018/020/021/022/023.
+
+**Context.** Phase 6/7 `--sync` chains install **92 files** into the live ISO
+under `archiso/airootfs/etc/skel/**` (`/.config/{gtk-3.0,gtk-4.0,hypr,kitty,...}`)
+and `archiso/airootfs/usr/share/**` (backgrounds, GRUB/Plymouth/SDDM themes,
+icons/cursors, `ar0x/branding`, `ar0x/logo`). ADR-023 correctly refused to write
+five PKGBUILDs that would install into those same paths: `pacman` would abort a
+Calamares install with `error: failed to commit transaction (conflicting files)`.
+
+**Decision 1 — ONE OWNER PER PATH.** The overlay remains the SOLE owner of those
+92 paths. The five packages install **package-private reference trees** instead:
+
+| Owner | Exclusive paths |
+|---|---|
+| airootfs overlay (ISO only) | `/etc/skel/**`, `/usr/share/{backgrounds/ar0x,grub/themes/ar0x,plymouth/themes/ar0x,sddm/themes/ar0x,icons/ar0x-cursors,ar0x/branding,ar0x/logo}/**` |
+| `ar0x-theme` | `/usr/share/ar0x/theme/**`, `/usr/bin/ar0x-apply-theme` |
+| `ar0x-wallpapers` | `/usr/share/ar0x/wallpapers/**`, `/usr/bin/ar0x-apply-wallpapers` |
+| `ar0x-hypr-config` | `/usr/share/ar0x/hypr-config/**`, `/usr/bin/ar0x-apply-hypr-config` |
+| `ar0x-keyring` | `/usr/share/pacman/keyrings/ar0x{gpg,-trusted,-revoked}` |
+| `ar0x-meta` | `/usr/share/doc/ar0x-meta/**` |
+
+`ar0x-apply-{theme,hypr-config,wallpapers}` bridge stock-Arch installs
+(`pacman -S ar0x-meta`) by copying 7 / 14 / 3 files into ONE user's
+`$XDG_CONFIG_HOME` / `$XDG_PICTURES_DIR` with timestamped backups under
+`<DEST>/ar0x-backups/`. No root, no network, no `/etc/skel` writes. Hyprland
+config stays **Lua-only** (RISK-002). 31 canonical → package mirrors are
+byte-identical, verified by `ar0x_repo.validate_mirrors()`.
+
+`tools/lib/ar0x_pkgbuild.py::OVERLAY_OWNED` enumerates forbidden `$pkgdir/...`
+prefixes; `validate_ownership()` proves `0/8` PKGBUILDs touch them. All 8
+PKGBUILDs now exist with **57 / 57 SHA-256 sums** (56 real + 1 MANUAL `SKIP`).
+
+**Decision 2 — NO PRIVATE KEY ON A PR WORKFLOW.** `validate-packages.yml` and
+`build-packages.yml` run on `pull_request` (forks included) with **ZERO
+secrets**. Only `release.yml` signs: `workflow_dispatch` on a protected ref or
+a `v*` tag, a protected `release` Environment, and an explicit fork guard in
+the job `if:`. `ar0x_repo.validate_workflows()` asserts this structurally. The
+offline master key stays in `${AR0X_KEYS_DIR}/gnupg` (`0700`); CI uses a
+dedicated signing subkey. RISK-051 is CRITICAL.
+
+**Decision 3 — `SigLevel = Required`, never relaxed.** Installed `[ar0x]`
+requires valid signatures on packages AND the database and inherits
+`TrustedOnly`. `repo-add -s` alone does NOT create package signatures, so the
+release workflow explicitly `gpg --detach-sign`s every tarball first, then
+`repo-add -s -v --include-sigs`, then `SHA256SUMS.sig`. `ar0x-keyring` ships
+`ar0x.gpg` + `ar0x-trusted` (`40-HEX-FPR:6:`) + `ar0x-revoked`, and its sourced
+`.install` calls `pacman-key --populate ar0x` in `post_install()` /
+`post_upgrade()`. `AR0X_REPO_REMOVE_OLD=0` preserves rollback (ADR-023).
+The build-only `Optional TrustAll` config is NEVER installed (RISK-006).
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Package-private trees + appliers ✅** | all 8 PKGBUILDs buildable; zero pacman conflicts; stock-Arch users get the same look | theme data exists twice on disk; one extra `ar0x-apply-*` step on stock Arch |
+| Put the 5 packages in the overlay too | no duplicate data | `pacman: conflicting files` during Calamares; breaks acceptance criterion 3 |
+| Delete the overlay and ship only packages | single owner | live ISO loses its look before `pacman -S`; Phase 11 would have to install packages at build time |
+| Sign in `build-packages.yml` (PRs) | simpler CI | **private key exposed to forked PR code** — unacceptable (RISK-051) |
+
+**Tradeoffs accepted:** duplicate reference data (~small text/SVG/PNG trees);
+`ar0x-keyring` cannot be built until the MANUAL air-gapped `--keygen` produces
+`ar0x-public-key.asc`; no signed repo / publication (RISK-048); `makepkg`,
+`namcap`, `shellcheck`, `gpg`, `repo-add`, `pacman` never ran here (RISK-049).
+
+**Reversal cost:** LOW for the applier layout (move an `install -D` prefix and
+refresh sums); HIGH for the signing/CI split (a leaked key requires rotation,
+revocation via `ar0x-revoked`, and re-signing every published package).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -651,3 +721,4 @@ then 5 new PKGBUILDs).
 | 021 Lua-only desktop + Qt6 SDDM | 0.57 correctness, no AUR deps, reproducible art | no custom GTK/Qt theme engine yet (deferred to `ar0x-theme` P8) |
 | 022 SVG-authoritative identity + standard XCursor | one geometry source, no compiler, RISK-040 closed | no compiled hyprcursor, no neofetch package, no live art render |
 | 023 Plain-GTK4 tools + non-root signed update + 5 packages deferred | three offline-testable tools, zero file-ownership conflicts, real SHA-256 PKGBUILDs | no `ar0x-meta` until P9, GTK4 window never rendered here (RISK-047) |
+| 024 ONE OWNER PER PATH + PR-safe signed repo | all 8 PKGBUILDs, zero pacman conflicts, private key never on a PR workflow | duplicate reference data on disk; generation/signing/publication remain MANUAL |

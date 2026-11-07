@@ -2,8 +2,9 @@
 # -----------------------------------------------------------------------------
 # /home/user/ar0xOS/tools/validate-versions.sh
 # -----------------------------------------------------------------------------
-# Phase 1 helper — validates version pins, build-tree structure, and the two
-# "stale upstream" traps before ANY build stage runs.
+# Phase 1 helper — validates version pins, build-tree structure, the two
+# "stale upstream" traps and the Phase 8/9 package/repository policy gates
+# before ANY build stage runs.
 #
 # This script is SAFE TO RUN IN A NON-ROOT SANDBOX: it only reads local files.
 # Phase 11's build-iso.sh MUST call it as stage 1 and abort on any failure.
@@ -62,6 +63,11 @@ REQUIRED_KEYS=(
     AR0X_UPDATE_REPO AR0X_UPDATE_SIGLEVEL
     AR0X_URL_DOCS AR0X_URL_ISSUES AR0X_URL_COMMUNITY AR0X_URL_SOURCE
     AR0X_URL_UPSTREAM
+    AR0X_REPO_NAME AR0X_REPO_DB AR0X_REPO_FILES_DB AR0X_REPO_SIGLEVEL
+    AR0X_REPO_ARCH AR0X_REPO_SERVER AR0X_REPO_KEY_UID AR0X_REPO_KEY_ALGO
+    AR0X_REPO_KEY_EXPIRE AR0X_REPO_KEY_FINGERPRINT_FILE AR0X_REPO_PUBLIC_KEY
+    AR0X_REPO_KEEP_OLD AR0X_REPO_CI_IMAGE AR0X_REPO_CI_BUILDER
+    AR0X_REPO_SIGN_PACKAGES
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -565,6 +571,68 @@ if [[ -f "${AR0X_SOURCE_ROOT}/config/kernel/ar0x-lts.config" ]]; then
     ok "CONFIG_RD_ZSTD=y asserted for zstd initramfs"
 fi
 
+# --- Section 7i: Phase 9 signed-repository policy gates ---------------------
+PHASE9_FILES=(
+    config/repo/repo-options.conf config/repo/README.md
+    config/repo/RELEASE_KEY_FINGERPRINT config/repo/pacman.conf.ar0x-entry
+    packages/ar0x-theme/PKGBUILD packages/ar0x-theme/README.md
+    packages/ar0x-theme/ar0x-apply-theme
+    packages/ar0x-wallpapers/PKGBUILD packages/ar0x-wallpapers/README.md
+    packages/ar0x-wallpapers/ar0x-apply-wallpapers
+    packages/ar0x-hypr-config/PKGBUILD packages/ar0x-hypr-config/README.md
+    packages/ar0x-hypr-config/ar0x-apply-hypr-config
+    packages/ar0x-keyring/PKGBUILD packages/ar0x-keyring/README.md
+    packages/ar0x-keyring/ar0x-trusted packages/ar0x-keyring/ar0x-revoked
+    packages/ar0x-keyring/ar0x-keyring.install
+    packages/ar0x-keyring/pacman.conf.ar0x-entry
+    packages/ar0x-meta/PKGBUILD packages/ar0x-meta/README.md
+    packages/ar0x-meta/RELEASE
+    tools/lib/ar0x_repo.py tools/setup-repo.sh docs/REPO_GUIDE.md
+    ci/workflows/validate-packages.yml ci/workflows/build-packages.yml
+    ci/workflows/release.yml ci/workflows/README.md
+)
+for f in "${PHASE9_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 9 deliverable: ${f}"
+done
+ok "Phase 9 deliverable files present (${#PHASE9_FILES[@]} files)"
+
+# ADR-024 / §9 security contract: NEVER relax the installed repository policy.
+[[ "${AR0X_REPO_NAME}" == "ar0x" ]] \
+    || fail "Phase 9: AR0X_REPO_NAME must be 'ar0x'."
+[[ "${AR0X_REPO_SIGLEVEL}" == "Required" && "${AR0X_UPDATE_SIGLEVEL}" == "Required" ]] \
+    || fail "Phase 9: [ar0x] SigLevel must be Required (never Optional/Never/TrustAll)."
+[[ "${AR0X_REPO_DB}" == "ar0x.db.tar.zst" && "${AR0X_REPO_FILES_DB}" == "ar0x.files.tar.zst" ]] \
+    || fail "Phase 9: db names must be ar0x.db.tar.zst / ar0x.files.tar.zst."
+[[ "${AR0X_REPO_SIGN_PACKAGES}" == "yes" && "${AR0X_REPO_KEEP_OLD}" == "3" ]] \
+    || fail "Phase 9: packages must be signed; keep-old must be 3 (rollback)."
+[[ "${AR0X_REPO_CI_BUILDER}" == "builder" && "${AR0X_REPO_CI_IMAGE}" == "archlinux:base-devel" ]] \
+    || fail "Phase 9: CI must use a non-root builder on archlinux:base-devel."
+grep -Fq 'SigLevel = Required' "${AR0X_SOURCE_ROOT}/config/repo/pacman.conf.ar0x-entry" \
+    || fail "Phase 9: pacman.conf.ar0x-entry lost SigLevel = Required."
+grep -Fq 'Server = https://repo.ar0x.dev/$arch' \
+        "${AR0X_SOURCE_ROOT}/config/repo/pacman.conf.ar0x-entry" \
+    || fail "Phase 9: [ar0x] Server endpoint drifted (RISK-050)."
+grep -Fq 'PENDING-KEYGEN' "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT" \
+    || grep -Eq '^[0-9A-F]{40}$' \
+           <(grep -v '^[[:space:]]*#' "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT") \
+    || fail "Phase 9: release fingerprint must be PENDING-KEYGEN or a 40-hex FPR."
+# RISK-051: a PR workflow must NEVER have access to signing secrets.
+for wf in validate-packages.yml build-packages.yml; do
+    grep -Fq 'secrets.' "${AR0X_SOURCE_ROOT}/ci/workflows/${wf}" \
+        && fail "RISK-051: ci/workflows/${wf} references secrets on a PR workflow."
+done
+grep -Fq 'secrets.AR0X_RELEASE_GPG_KEY' "${AR0X_SOURCE_ROOT}/ci/workflows/release.yml" \
+    || fail "RISK-051: release.yml lost its signing-secret contract."
+grep -Fq 'repo-add -s' "${AR0X_SOURCE_ROOT}/ci/workflows/release.yml" \
+    || fail "Phase 9: release.yml lost 'repo-add -s'."
+ok "Phase 9 policy gates: Required, db names, signed packages, non-root CI, PR-safe secrets, keygen state"
+
+# Delegate the FULL Phase 9 structural check (repo options parity, pacman entry
+# parity, keyring, build order, 31 mirrors, 3 workflows, secret scan) to the
+# shared module so both validators agree on ONE definition.
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_repo.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Phase 9 structural validation failed (tools/lib/ar0x_repo.py)."
+
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then
     die "Validation FAILED with ${ERRORS} error(s). Fix them before running build-iso.sh."
@@ -579,4 +647,6 @@ printf '   Brand        : %s logo, %s cursors, %s\n' \
     "${AR0X_BRAND_LOGO_VIEWBOX}" "${AR0X_BRAND_CURSOR_THEME}" "${AR0X_BRAND_LICENSE}"
 printf '   Tools        : %s (welcome/update/info), SigLevel %s\n' \
     "${AR0X_TOOLS_VERSION}" "${AR0X_UPDATE_SIGLEVEL}"
+printf '   Repo         : [%s] %s, %s, builder=%s (key PENDING-KEYGEN)\n' \
+    "${AR0X_REPO_NAME}" "${AR0X_REPO_SIGLEVEL}" "${AR0X_REPO_DB}" "${AR0X_REPO_CI_BUILDER}"
 exit 0

@@ -1,0 +1,106 @@
+# /home/user/ar0xOS/ci/workflows/build-packages.yml
+# -----------------------------------------------------------------------------
+# PHASE 9 — build ALL 8 ar0x packages in a CLEAN Arch container, run namcap +
+# shellcheck, and produce an UNSIGNED local db for a pacman smoke test.
+#
+# ⚠️ NO SECRETS in this workflow: it also runs on pull_request from forks.
+#    Signing + publication live ONLY in release.yml (RISK-051).
+#
+# ⚠️ makepkg REFUSES to run as root, so every build runs as the non-root
+#    `builder` account. All 8 packages are arch=('any') with no compile step;
+#    `makepkg --nodeps` is REQUIRED because ar0x-welcome / ar0x-meta depend on
+#    other ar0x packages that do not exist in any repo until this job finishes.
+# -----------------------------------------------------------------------------
+name: build-packages
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AR0X_REPO_CI_BUILDER: builder
+  AR0X_REPO_DB: ar0x.db.tar.zst
+
+jobs:
+  build:
+    name: makepkg x8 in archlinux:base-devel
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container:
+      image: archlinux:base-devel
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialise the container keyring + toolchain
+        run: |
+          set -euo pipefail
+          pacman-key --init
+          pacman -Syu --noconfirm --needed \
+            base-devel git gnupg namcap shellcheck pacman-contrib sudo
+          # makepkg refuses root. Passwordless sudo is scoped to THIS container.
+          useradd -m -s /bin/bash "$AR0X_REPO_CI_BUILDER"
+          printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$AR0X_REPO_CI_BUILDER" \
+            > "/etc/sudoers.d/$AR0X_REPO_CI_BUILDER"
+          chown -R "$AR0X_REPO_CI_BUILDER:$AR0X_REPO_CI_BUILDER" "$GITHUB_WORKSPACE"
+
+      - name: Static analysis (shellcheck + namcap PKGBUILD)
+        run: |
+          set -euo pipefail
+          shellcheck -x -s bash tools/*.sh tools/lib/*.sh 2>/dev/null || true
+          bash -n packages/*/ar0x-apply-*
+          for d in packages/*/PKGBUILD; do namcap "$d" || true; done
+          # The hard gate is the offline structural validator, not namcap's
+          # advisory output (it cannot resolve intra-repo depends here).
+          ./tools/setup-repo.sh --check
+
+      - name: Build all 8 packages as a NON-ROOT builder
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build/ci-pkgs"
+          for pkg in ar0x-info ar0x-update ar0x-keyring ar0x-welcome \
+                     ar0x-theme ar0x-wallpapers ar0x-hypr-config ar0x-meta; do
+            # ar0x-keyring needs ar0x-public-key.asc from the MANUAL keygen.
+            # On unsigned PR builds we skip ONLY that package and report it.
+            if [[ "$pkg" == ar0x-keyring && \
+                  ! -f "packages/ar0x-keyring/ar0x-public-key.asc" ]]; then
+              echo "::warning::ar0x-keyring skipped: public key not generated (MANUAL keygen)"
+              continue
+            fi
+            echo "==> building $pkg"
+            ( cd "packages/$pkg" && \
+              sudo -u "$AR0X_REPO_CI_BUILDER" \
+                makepkg --nodeps --noconfirm --force )
+            cp -a "packages/$pkg"/*.pkg.tar.zst "$GITHUB_WORKSPACE/build/ci-pkgs/"
+          done
+
+      - name: namcap the produced packages
+        run: |
+          set -euo pipefail
+          for p in "$GITHUB_WORKSPACE"/build/ci-pkgs/*.pkg.tar.zst; do
+            namcap "$p" || true
+          done
+
+      - name: Unsigned local repo smoke test (no secrets, no publication)
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/build/ci-pkgs"
+          # repo-add WITHOUT -s: this is an ephemeral CI smoke test only.
+          # The PUBLISHED db is always signed by release.yml (`repo-add -s`).
+          repo-add ar0x.db.tar.zst ./*.pkg.tar.zst
+          test -f ar0x.db.tar.zst
+          test -f ar0x.files.tar.zst
+          echo "[ OK ] unsigned local db built from $(ls -1 ./*.pkg.tar.zst | wc -l) packages"
+
+      - name: Upload unsigned build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ar0x-unsigned-packages
+          path: build/ci-pkgs/*
+          retention-days: 7

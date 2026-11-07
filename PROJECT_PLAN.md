@@ -1,8 +1,8 @@
 # ar0x — Architecture & Project Plan
 
 > **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
-> Document version: `1.8.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
-> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–8 complete; Phase 9 awaiting confirmation**
+> Document version: `1.9.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–9 complete; Phase 10 awaiting confirmation**
 >
 > All versions in this document were verified against upstream releases on 2026-11-03.
 > Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
@@ -32,7 +32,8 @@
   `pacstrap`, `chroot`, `grub-install`, and QEMU boot tests **cannot execute here**. All files are
   real and copy-pasteable for a root-capable Arch Linux host; scripts are syntax-checked with
   `bash -n` and `shellcheck` where available, but functional boot verification is a **manual
-  host-side step** (§14).
+  host-side step** (§14). Phase 9 additionally cannot run `gpg`, `makepkg`, `repo-add`,
+  `pacman`, `namcap` or publish a signed repository here (§10, RISK-051).
 
 ---
 
@@ -293,7 +294,7 @@ Two roots are deliberately separated:
 │   ├── icons/ar0x-logo.svg                 # Phase 7 ✅ LOGO=ar0x-logo icon
 │   ├── cursors/ar0x-cursors/               # Phase 7 ✅ XCursor theme (RISK-040 CLOSED)
 │   └── ascii/README.md                     # Phase 7 ✅ canonical art lives in config/branding/
-├── packages/                              # Phase 8 ✅ 3 tools + 5 P9 skeletons
+├── packages/                              # Phase 9 ✅ all 8 PKGBUILDs (57/57 sums)
 │   ├── README.md                          # ownership / deferral index
 │   ├── ar0x-info/{PKGBUILD,ar0x-info,ar0x-info.desktop,fastfetch.jsonc,*.txt}
 │   ├── ar0x-update/{PKGBUILD,ar0x-update,ar0x-update.desktop,update.conf}
@@ -301,7 +302,7 @@ Two roots are deliberately separated:
 │   │                ar0x-welcome.service,ar0x-firstboot.service,
 │   │                ar0x-firstboot,ar0x-apparmor-ctl,*.install}
 │   └── {ar0x-theme,ar0x-wallpapers,ar0x-hypr-config,ar0x-keyring,ar0x-meta}/
-│       └── README.md                      # ⏳ Phase 9 (one-owner-per-path, ADR-023)
+│       └── {PKGBUILD,README.md,...}       # ✅ Phase 9 (ADR-024 one-owner-per-path)
 ├── tools/                                 # all scripts: #!/bin/bash + set -euo pipefail
 │   ├── lib/common.sh
 │   ├── setup-build-env.sh                 # Phase 2
@@ -314,14 +315,17 @@ Two roots are deliberately separated:
 │   ├── lib/{common.sh,ar0x_logo.py,ar0x_xcursor.py}  # Phase 7 shared geometry
 │   ├── gen-branding-assets.sh             # Phase 7 — logo PNGs + XCursor binaries
 │   ├── configure-branding.sh              # Phase 7 — --check/--sync/--apply
-│   ├── lib/ar0x_pkgbuild.py               # Phase 8 — PKGBUILD/desktop/unit validator
+│   ├── lib/ar0x_pkgbuild.py               # Phase 8+9 — 8-package PKGBUILD validator
+│   ├── lib/ar0x_repo.py                   # Phase 9 — repo policy/CI/secret validator
 │   ├── configure-tools.sh                 # Phase 8 — --check/--sync/--self-test/--build
-│   ├── setup-repo.sh                      # Phase 9
+│   ├── setup-repo.sh                      # Phase 9 — check/sync/self-test/verify/
+│   │                                      # keygen/build/sign/publish driver
 │   ├── build-iso.sh                       # Phase 11 (master orchestrator)
 │   ├── checksum.sh                        # Phase 11
 │   └── validate-versions.sh                # Phase 1 helper
 ├── repo/                                  # Phase 9 — built package output (gitignored)
-├── ci/workflows/                          # Phase 9 — GitHub Actions
+├── ci/workflows/                          # Phase 9 ✅ validate/build/release YAMLs
+├── config/repo/                           # Phase 9 ✅ canonical repo policy
 ├── docker/                                # Phase 2 — Docker option
 │   ├── Dockerfile , compose.yaml , run.sh
 ├── vagrant/                               # Phase 2 — Vagrant option
@@ -568,7 +572,7 @@ graphical-session.target → ar0x-welcome.service (USER, NORMAL USER, no root)
 ⚠️ **Two units are required:** a system unit cannot open a Wayland window, and
 a user unit has no `ConditionFirstBoot`. `ar0x-firstboot.service` is deliberately
 NOT in `50-ar0x.preset` (that preset is the single owner of live-ISO service
-state; the package is not installed on the ISO until Phase 9/10). Full wiring
+state; the package is not installed on the ISO until Phase 11). Full wiring
 and the exact installed paths: `/home/user/ar0xOS/docs/TOOLS_GUIDE.md §3`.
 
 ---
@@ -577,8 +581,8 @@ and the exact installed paths: `/home/user/ar0xOS/docs/TOOLS_GUIDE.md §3`.
 
 | Control | Implementation | Phase |
 |---|---|---|
-| Package authenticity | `SigLevel = Required DatabaseOptional` in build + installed `pacman.conf`; `[ar0x]` packages signed with `repo-add -s` | 3, 9 |
-| Repo signing | Offline GPG key in `/opt/ar0x-build/keys/` (mode 0700), public key shipped in `ar0x-keyring` | 9 |
+| Package authenticity | **installed** `[ar0x] SigLevel = Required` (packages AND db, inherits `TrustedOnly`); **build-only** `config/pacman.conf.build` uses `Optional TrustAll` with `file://@AR0X_REPO_DIR@` and is NEVER installed (RISK-006). `makepkg --sign` / `gpg --detach-sign` creates per-package `.sig`; `repo-add -s -v --include-sigs` signs the db. Unsafe: `Never`, `Optional`, `TrustAll`, `DatabaseOptional` | 3, 9 ✅ |
+| Repo signing | Offline GPG key in `/opt/ar0x-build/keys/gnupg` (mode 0700, MANUAL `--keygen`), public armored key shipped in `ar0x-keyring`, `pacman-key --populate ar0x` + `ar0x-trusted` ownertrust. `RELEASE_KEY_FINGERPRINT` is `PENDING-KEYGEN` (RISK-051) | 9 ✅ tooling / MANUAL key |
 | Secure Boot (optional) | `shim-signed` + `sbsigntools`-signed GRUB/kernel; **MOK enrollment is manual** | 4, 11 |
 | MAC | AppArmor in `complain` mode for v0.1; `aa-enforce` opt-in via welcome app | 5 |
 | Firewall | nftables: default `drop` inbound, allow established/related + loopback, ICMP rate-limited | 5 |
@@ -600,7 +604,7 @@ by default is a v0.2 decision.
 
 ---
 
-## 10. Packaging & repository architecture (Phase 9 preview)
+## 10. Packaging & repository architecture (Phase 9 ✅ COMPLETE)
 
 ```
 /opt/ar0x-build/repo/x86_64/
@@ -608,38 +612,56 @@ by default is a v0.2 decision.
 ├── ar0x.files.tar.zst     (+ .sig)
 └── ar0x-*.pkg.tar.zst    (+ .sig)
 
-/etc/pacman.conf (installed system), appended AFTER [core]/[extra]:
+/etc/pacman.conf (installed system), [ar0x] FIRST before [core] (ADR-017):
   [ar0x]
   SigLevel = Required
-  Server = https://repo.ar0x.dev/$arch        # or GitHub Releases raw path for v0.1
+  Server = https://repo.ar0x.dev/$arch        # RESERVED endpoint; Phase 12 DNS + upload
 ```
 
 Packages built by CI (`ci/workflows/build-packages.yml`):
 
-| Package | Contents |
-|---|---|
-| `ar0x-welcome` | GTK4 Python app + `.desktop` + first-boot unit |
-| `ar0x-update` | `pacman` wrapper + `.desktop` |
-| `ar0x-info` | fastfetch wrapper + ASCII logo + `.desktop` |
-| `ar0x-theme` | GTK3/GTK4, Qt5/Qt6, icons, cursors, fontconfig |
-| `ar0x-hypr-config` | `/etc/skel/.config/hypr/hyprland.lua` + Lua modules |
-| `ar0x-wallpapers` | Wallpapers + Plymouth/GRUB/SDDM art |
-| `ar0x-keyring` | GPG public key + pacman trust bootstrap |
-| `ar0x-meta` | Meta-package pulling the standard ar0x experience |
+| Package | Contents | Phase 9 installed paths (ADR-024, package-PRIVATE) |
+|---|---|---|
+| `ar0x-welcome` | GTK4 Python app + `.desktop` + first-boot unit | `/usr/bin/ar0x-welcome`, `/usr/share/applications/**` (P8) |
+| `ar0x-update` | `pacman` wrapper + `.desktop` | `/usr/bin/ar0x-update`, `/etc/ar0x/update.conf` (P8) |
+| `ar0x-info` | fastfetch wrapper + ASCII logo + `.desktop` | `/usr/bin/ar0x-info`, `/usr/share/ar0x/info/**` (P8) |
+| `ar0x-theme` | GTK3/GTK4, Qt5/Qt6, fontconfig reference tree | `/usr/share/ar0x/theme/**` + `/usr/bin/ar0x-apply-theme` |
+| `ar0x-hypr-config` | Hyprland 0.57 Lua-only config (entry + 10 modules) | `/usr/share/ar0x/hypr-config/**` + `/usr/bin/ar0x-apply-hypr-config` |
+| `ar0x-wallpapers` | 3× 4K wallpapers + SVG masters + boot-art references | `/usr/share/ar0x/wallpapers/**` + `/usr/bin/ar0x-apply-wallpapers` |
+| `ar0x-keyring` | GPG public key + pacman trust bootstrap | `/usr/share/pacman/keyrings/ar0x{gpg,-trusted,-revoked}` |
+| `ar0x-meta` | Meta-package pulling the standard ar0x experience | `/usr/share/doc/ar0x-meta/RELEASE`; depends on the other 7 |
 
-Each PKGBUILD is built in a clean `archlinux:base-devel` container with `makepkg -s --noconfirm`,
-signed, and published via `repo-add`. CI also runs `namcap` and `shellcheck`.
+`ci/workflows/build-packages.yml` builds all 8 in a clean `archlinux:base-devel`
+container as a **non-root** `builder` with `makepkg --nodeps --noconfirm --force`
+(`--nodeps` is required for intra-repo depends), then runs `namcap` + `shellcheck`
+and an **UNSIGNED** local `repo-add` smoke test. Signing + publication happen ONLY
+in `ci/workflows/release.yml` (protected Environment, `workflow_dispatch` / `v*`
+tag, NEVER `pull_request`): `gpg --batch --detach-sign` each package, then
+`repo-add -s -v --include-sigs`, then `SHA256SUMS.sig`. RISK-051.
 
-**Phase 8 result (⚠️ partial by design, ADR-023):** the first THREE rows are
-COMPLETE with real PKGBUILDs, local `source=()` arrays and 18 real SHA-256 sums —
-see `/home/user/ar0xOS/packages/README.md`. The remaining FIVE are deferred to
-Phase 9: their sources are already installed into the live ISO by the Phase 6/7
-`--sync` chains, so a second package owning the same `/etc/skel/**` paths would
-cause a `pacman: conflicting files` failure during a Calamares install. Phase 9
-must record ONE owner per path before writing those PKGBUILDs; `ar0x-keyring`
-additionally needs the offline GPG key. **None of the eight packages is on the
-ISO in Phase 8** (RISK-048): `config/packages.x86_64` carries only the three
-runtime dependencies `python`, `python-gobject`, `fakeroot`.
+`validate-packages.yml` is the PR-safe workflow: ZERO secrets, the whole read-only
+validator chain + `ar0x_repo.py --self-test` + a private-key scan. `tools/setup-repo.sh`
+provides `--check/--sync/--self-test/--verify/--keygen/--build/--sign/--publish`;
+`--publish` NEVER uploads. See `docs/REPO_GUIDE.md`.
+
+**Phase 9 result (✅ COMPLETE, ADR-024 resolves ADR-023):** ALL EIGHT packages
+now have real PKGBUILDs with local `source=()` arrays and **57 / 57 SHA-256 sums**
+(56 real + 1 MANUAL `SKIP` for the generated `ar0x-public-key.asc`). The
+airootfs overlay keeps its **92** ISO-owned files under `/etc/skel/**` and
+`/usr/share/**`; the five formerly deferred packages instead install
+**package-private reference trees** under `/usr/share/ar0x/<pkg>/**` plus
+three `/usr/bin/ar0x-apply-*` helpers that copy into one user's XDG directories
+with timestamped backups. `ar0x_pkgbuild.validate_ownership()` proves
+`0/8` PKGBUILDs touch an overlay-owned path, so a Calamares install can never
+hit `pacman: conflicting files`. 31 canonical → package mirrors are byte-identical.
+
+⚠️ **MANUAL GATES (RISK-048 / 051):** the offline GPG release key is NOT
+generated (`RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`, `ar0x-trusted` empty),
+no signed `[ar0x]` database exists, no package was built/signed/published, and
+`repo.ar0x.dev` is a RESERVED endpoint. `config/packages.x86_64` still carries
+ZERO `ar0x-*` packages (Phase 11 gate). Acceptance criterion 7 therefore
+remains **blocked on keygen → build → sign → publish**, not on missing source.
+Full procedure: `/home/user/ar0xOS/docs/REPO_GUIDE.md §3`.
 
 ---
 
@@ -679,6 +701,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-021 | Lua-only desktop, Qt6 SDDM, balanced toolkit theming | 0.57 correctness + reproducibility vs. a full custom GTK/Qt theme engine |
 | ADR-022 | SVG-authoritative identity, standard XCursor, no AUR fetch tool | one geometry source + no build-time compiler vs. a compiled hyprcursor theme and shipping neofetch |
 | ADR-023 | Plain-GTK4 tools, non-root signed-update wrapper, 5 packages deferred to P9 | real offline-testable CLI tools + zero file-ownership conflicts vs. a full 8-package repo in P8 |
+| ADR-024 | ONE OWNER PER PATH: airootfs overlay owns 92 ISO paths; 5 P9 packages install `/usr/share/ar0x/<pkg>/**` + 3 user-space `ar0x-apply-*` helpers; PR-safe CI with zero secrets | all 8 PKGBUILDs buildable with zero pacman file conflicts vs. duplicate theme data on disk and a second copy step for stock-Arch users |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -706,9 +729,10 @@ Full register with mitigations and trigger conditions:
 | RISK-046 | LOW | PNG raster uses round joins where the SVG uses mitre joins (P7) |
 | RISK-010 | LOW | Rolling Arch snapshot drift despite archive pin (AUR/git sources) |
 | RISK-047 | ⚠️ HIGH | GTK4 ar0x-welcome window never rendered here — structural + headless self-tests only (P8) |
-| RISK-048 | ⚠️ HIGH | Signed `[ar0x]` repo is Phase 9; the 3 tool packages are source-only, NOT on the ISO (P8) |
-| RISK-049 | MEDIUM | PKGBUILDs checksum-verified but never built with `makepkg` / `namcap` (P8) |
-| RISK-050 | LOW | 5 reserved welcome link endpoints; `/tree/main/docs` needs the PR merged (P12) |
+| RISK-048 | ⚠️ HIGH | Signed `[ar0x]` database is STILL not built/published after P9 tooling; all 8 packages are source-only, `config/packages.x86_64` has zero `ar0x-*` (P8/P9 → P11/P12) |
+| RISK-049 | MEDIUM | All 8 PKGBUILDs checksum-verified (57/57) but never built with `makepkg` / `namcap` (P8/P9) |
+| RISK-050 | LOW | 5 reserved welcome link endpoints + `repo.ar0x.dev`; `/tree/main/docs` needs the PR merged (P12) |
+| RISK-051 | ⚠️ CRITICAL | Offline private release key + CI signing secrets: leakage or a bad published signature is a security incident. `PENDING-KEYGEN`, empty `ar0x-trusted`, PR workflows with ZERO secrets, protected `release` Environment, fork guard, gitignored key artifacts |
 
 ---
 
@@ -728,7 +752,10 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 8 | ⚠️ `ar0x-update --upgrade` replaces kernel/glibc/GPU drivers | You | No automatic rollback; use `--rollback` + `pacman -U` |
 | 8 | Calamares `finished` must arm `ar0x-firstboot.service` + regenerate `/etc/machine-id` | You | `ConditionFirstBoot=yes`; RISK-013 guard; Phase 10 wiring |
 | 8 | `namcap` / `shellcheck` / `desktop-file-validate` / `systemd-analyze verify` | You | All four unavailable in this sandbox |
-| 9 | Generate release signing key; publish fingerprint | You | Key custody |
+| 9 | `sudo AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen` on an AIR-GAPPED host; COMMIT the fingerprint; publish it out of band; run `--sync` | You | Key custody, RISK-051; no gpg/pinentry here |
+| 9 | `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on a real Arch host; then `namcap` + `shellcheck` | You | `makepkg` refuses root; RISK-049 |
+| 9 | `sudo AR0X_CONFIRM_SIGN=yes ./tools/setup-repo.sh --sign` → `--verify` | You | `gpg` + `repo-add -s` unavailable here; RISK-048 |
+| 9 | `./tools/setup-repo.sh --publish` then the printed `rsync` / `gh release create` commands; provision DNS + TLS for `repo.ar0x.dev`; `pacman-key --init` + `--populate ar0x` on a test host | You | `--publish` NEVER uploads; Phase 12 gate |
 | 10 | Walk the installer flow; **verify the target disk before confirming partitioning** | You | ⚠️ RISK-004, destructive |
 | 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox |
 | 11 | Confirm SHA256 + GPG signature of the final ISO | You | Release gate |
@@ -750,7 +777,7 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | **6** | Desktop & Theming ✅ | Hyprland **Lua** entry + 10 modules, `hyprpaper`/`hyprlock`/`hypridle`, Waybar, SDDM 0.21 **Qt6** QML theme, GTK3/GTK4 (libadwaita `@define-color`), Qt5/Qt6 via `qt5ct:qt6ct`, Papirus icons, Adwaita cursor placeholder (→ real `ar0x-cursors` in Phase 7), Inter/JetBrainsMono Nerd fontconfig, 3× 4K wallpapers, 11 `/etc/skel` dotfiles + 10 generated `.config` trees, `tools/configure-desktop.sh`, `tools/gen-desktop-assets.sh`, `docs/DESKTOP_GUIDE.md` | `configure-desktop.sh --check` + `validate-versions.sh` (0 warnings) pass; `Hyprland --verify-config`, `sddm-greeter --test-mode`, QEMU Wayland QA are manual |
 | **7** | Branding & Identity ✅ | `/etc/{os-release,lsb-release,issue,issue.net,motd}` + `/usr/lib/os-release`, `palette.conf`, 3 ASCII variants (fastfetch/neofetch/screenfetch), 4 SVG masters + 2 logo PNGs + `LOGO` icon, real ar0x XCursor theme (5 shapes × 3 sizes + 12 aliases), final GRUB/Plymouth/syslinux art, `tools/lib/{ar0x_logo.py,ar0x_xcursor.py}`, `tools/gen-branding-assets.sh`, `tools/configure-branding.sh`, `docs/BRANDING_GUIDE.md`, ADR-022, RISK-040 closed | `configure-branding.sh --check` + `validate-versions.sh` pass (0 warnings); SVG/PNG/XCursor/JSONC all parsed back; `fastfetch` shows ar0x identity |
 | **8** | Custom ar0x Tools ✅ | `ar0x-welcome` (GTK4/PyGObject, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 3 PKGBUILDs with real SHA-256 sums, 2 systemd units, RISK-013/008 helpers, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md`, ADR-023, 5 Phase 9 skeletons | `configure-tools.sh --check/--sync/--self-test` + `validate-versions.sh` pass; all three run offline; GTK4 render + `makepkg`/`namcap` are manual |
-| 9 | Package Repository ← **NEXT (awaiting confirmation)** | `[ar0x]` repo, `repo-add` + signing, GitHub Actions CI, `pacman.conf` entry, `tools/setup-repo.sh` | Signed install from repo works on a clean system |
+| **9** | Package Repository ✅ | **All 8** PKGBUILDs (57/57 sums), ADR-024 one-owner-per-path + 3 `ar0x-apply-*` helpers, `ar0x-keyring` trust bootstrap, `config/repo/**` policy (12 options), 14 `versions.env` keys, `tools/setup-repo.sh`, `tools/lib/ar0x_repo.py`, 3 GitHub Actions workflows (PR-safe / build / release), `docs/REPO_GUIDE.md`, ADR-024, RISK-051 | `setup-repo.sh --check/--sync/--self-test`, `ar0x_repo.py` (+ `--self-test`), `ar0x_pkgbuild.py`, `validate-versions.sh`, `bash -n`, Python AST, `git diff --check` pass. ⚠️ keygen/signing/publication/`makepkg` are MANUAL; no signed repo exists |
 | 10 | Installer | Calamares 3.4.3 branding modules, `settings.conf`, all module configs, step-by-step test flow | Full install → reboot → first boot succeeds |
 | 11 | ISO Build & Testing | `tools/build-iso.sh`, `tools/checksum.sh`, QEMU UEFI/BIOS cmds, VBox/VMware steps, `docs/TESTING_CHECKLIST.md` | Checklist 100% pass; ISO < 2.2 GB |
 | 12 | Release & Distribution | `README.md`, announcement template, upload guide, DistroWatch draft, roadmap template | Tag `v0.1.0` published with signatures |
@@ -771,8 +798,11 @@ Steps that **cannot** be automated, flagged here per the output rules:
    Phase 8 proof: `./tools/configure-tools.sh --self-test` runs all three offline;
    live `curl -IL` of the 5 links is a Phase 12 gate (RISK-050).
 7. `pacman -S ar0x-meta` works from the signed `[ar0x]` repo on a stock Arch install.
-   ⚠️ Blocked until Phase 9 (RISK-048): the 3 Phase 8 packages install cleanly from
-   local PKGBUILDs, but `ar0x-meta` and `ar0x-keyring` are Phase 9 deliverables.
+   ⚠️ **STILL BLOCKED (RISK-048/051):** Phase 9 delivered all 8 PKGBUILDs and the
+   complete signing/CI tooling, but the offline release key is `PENDING-KEYGEN`,
+   no `makepkg`/`gpg`/`repo-add` ran, no signed db exists, and `repo.ar0x.dev` is
+   a reserved endpoint. Remaining gates: MANUAL `--keygen` → `--sync` → `--build`
+   → `--sign` → Phase 12 publication (see `docs/REPO_GUIDE.md §3`).
 8. Every script passes `bash -n` and `shellcheck`; every script starts with
    `#!/bin/bash` and `set -euo pipefail`. **Documented exemptions** (they are
    SOURCED, so strict mode would leak into the parent process):

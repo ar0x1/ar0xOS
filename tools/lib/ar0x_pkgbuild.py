@@ -10,6 +10,9 @@
 # STRUCTURAL checks that can be done offline; docs/TOOLS_GUIDE.md §9 lists
 # exactly what still needs a real Arch host.
 #
+# Phase 9 extended this module from 3 to ALL 8 packages and added the
+# ADR-024 one-owner-per-path gate (validate_ownership).
+#
 # Usage: python3 tools/lib/ar0x_pkgbuild.py <SOURCE_ROOT>
 #        (or `import ar0x_pkgbuild; ar0x_pkgbuild.run_checks(root)`)
 # -----------------------------------------------------------------------------
@@ -25,9 +28,26 @@ from pathlib import Path
 import re
 import sys
 
-PACKAGES = ("ar0x-info", "ar0x-update", "ar0x-welcome")
-DEFERRED = ("ar0x-theme", "ar0x-wallpapers", "ar0x-hypr-config",
-            "ar0x-keyring", "ar0x-meta")
+TOOL_PACKAGES = ("ar0x-info", "ar0x-update", "ar0x-welcome")
+REPO_PACKAGES = ("ar0x-theme", "ar0x-wallpapers", "ar0x-hypr-config",
+                 "ar0x-keyring", "ar0x-meta")
+ALL_PACKAGES = TOOL_PACKAGES + REPO_PACKAGES   # 8 packages, PROJECT_PLAN.md §10
+# Backwards-compatible alias used by earlier docs / scripts.
+PACKAGES = TOOL_PACKAGES
+
+# ADR-024: these paths are owned by the Phase 6/7 airootfs overlay on the ISO.
+# NO PKGBUILD may install into them, or `pacman -U` reports conflicting files.
+OVERLAY_OWNED = (
+    "$pkgdir/etc/skel",
+    "$pkgdir/usr/share/backgrounds/ar0x",
+    "$pkgdir/usr/share/plymouth",
+    "$pkgdir/usr/share/grub",
+    "$pkgdir/usr/share/sddm",
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/ar0x-logo.svg",
+    "$pkgdir/usr/share/icons/ar0x-cursors",
+    "$pkgdir/usr/share/ar0x/branding",
+    "$pkgdir/usr/share/ar0x/logo",
+)
 PALETTE_KEYS = ("AR0X_VOID", "AR0X_SURFACE", "AR0X_CYAN", "AR0X_MAGENTA",
                 "AR0X_LIME", "AR0X_TEXT", "AR0X_MUTED", "AR0X_ALERT")
 URL_KEYS = ("DOCS", "ISSUES", "COMMUNITY", "SOURCE", "UPSTREAM")
@@ -56,7 +76,8 @@ def parse_env(path):
     for line in read(path).splitlines():
         m = re.match(r'^([A-Z0-9_]+)="([^"]*)"\s*(?:#.*)?$', line)
         if m:
-            out[m.group(1)] = m.group(2)
+            # Shell-escaped \$arch -> literal $arch for comparison with confs.
+            out[m.group(1)] = m.group(2).replace("\\$", "$")
     return out
 
 
@@ -113,15 +134,26 @@ def validate_pkgbuild(root, pkg):
     assert len(srcs) == len(sums), "%s: %d sources but %d sha256sums" % (
         rel, len(srcs), len(sums))
     body = d["_text"]
+    skipped = 0
     for src, want in zip(srcs, sums):
         f = root / "packages" / pkg / src
+        assert '$srcdir/%s' % src in body, "%s: %s not installed by package()" % (rel, src)
+        if want == "SKIP":
+            # The ONLY legitimate SKIP is the MANUAL, gitignored public key.
+            assert pkg == "ar0x-keyring" and src == "ar0x-public-key.asc", \
+                "%s: SKIP is only allowed for ar0x-keyring/ar0x-public-key.asc" % rel
+            skipped += 1
+            if not f.is_file():
+                print("[WARN] ar0x-keyring: ar0x-public-key.asc absent "
+                      "(MANUAL: sudo ./tools/setup-repo.sh --keygen)")
+            continue
         assert f.is_file(), "%s: source file missing: %s" % (rel, src)
         got = sha256(f)
         assert got == want, "%s: sha256 mismatch for %s (PKGBUILD %s, file %s)" % (
             rel, src, want[:12], got[:12])
-        assert '$srcdir/%s' % src in body, "%s: %s not installed by package()" % (rel, src)
-    ok("%s PKGBUILD: %d/%d real SHA-256 sums, %d sources all installed" %
-       (pkg, len(sums), len(sums), len(srcs)))
+    real = len(sums) - skipped
+    ok("%s PKGBUILD: %d/%d real SHA-256 sums, %d SKIP, %d sources installed" %
+       (pkg, real, len(sums), skipped, len(srcs)))
     return d
 
 
@@ -302,36 +334,59 @@ def validate_sources(root):
     ok("ar0x-welcome.install: post_install enables the user unit offline-safe")
 
 
-def validate_deferred(root):
-    for name in DEFERRED:
-        assert (root / "packages" / name / "README.md").is_file(), \
-            "%s must have a Phase 9 deferral README" % name
-        assert not (root / "packages" / name / "PKGBUILD").exists(), \
-            "%s has a PKGBUILD but no ownership decision yet" % name
-    ok("5 Phase 9 package skeletons documented, 0 premature PKGBUILDs")
+def validate_phase9_packages(root):
+    """Phase 9 resolved ADR-023: all 5 skeletons now have real PKGBUILDs."""
+    for name in REPO_PACKAGES:
+        assert (root / "packages" / name / "PKGBUILD").is_file(), \
+            "%s: Phase 9 PKGBUILD missing" % name
+        readme = read(root / "packages" / name / "README.md")
+        assert "COMPLETE" in readme, "%s README still says DEFERRED" % name
+        assert "DEFERRED" not in readme, "%s README still says DEFERRED" % name
+    ok("5 Phase 9 packages: real PKGBUILDs, READMEs marked COMPLETE (ADR-023 resolved)")
 
 
-def validate_no_repo_packages_yet(root):
-    """The signed [ar0x] repo does not exist until Phase 9; never put ar0x-*
-    packages in the ISO package list (bootstrap.sh --check would fail)."""
+def validate_ownership(root):
+    """ADR-024 ONE OWNER PER PATH. The ISO airootfs overlay already owns the
+    system paths below; a PKGBUILD installing there produces
+    `pacman: conflicting files` during a Calamares install."""
+    for pkg in ALL_PACKAGES:
+        body = read(root / "packages" / pkg / "PKGBUILD")
+        # Strip comments: several PKGBUILD headers explain that 0.57 REMOVED
+        # hyprland.conf, which would false-positive a plain substring search.
+        code = "\n".join(l.split("#", 1)[0] for l in body.splitlines())
+        for prefix in OVERLAY_OWNED:
+            assert prefix not in code, \
+                "%s installs into overlay-owned %s (ADR-024)" % (pkg, prefix)
+        assert "hyprland.conf" not in code, \
+            "%s references hyprland.conf (RISK-002; 0.57 is Lua-only)" % pkg
+    # Every Phase 9 payload package must install into its OWN private tree.
+    for pkg in ("ar0x-theme", "ar0x-wallpapers", "ar0x-hypr-config"):
+        body = read(root / "packages" / pkg / "PKGBUILD")
+        assert "$pkgdir/usr/share/ar0x/" in body, \
+            "%s does not install into a package-private /usr/share/ar0x tree" % pkg
+    ok("ADR-024: 0/8 PKGBUILDs touch overlay-owned paths; 0 hyprland.conf references")
+
+
+def validate_iso_package_policy(root):
+    """Phase 9 publishes the repo tooling, but the ISO does NOT list ar0x-*
+    packages until Phase 11's build-iso.sh injects them after `setup-repo.sh
+    --publish` creates ar0x.db. bootstrap.sh --check would otherwise fail
+    against the frozen 2026/11/01 snapshot (RISK-048, ADR-017)."""
     body = "\n".join(l.split("#", 1)[0].strip()
                      for l in read(root / "config/packages.x86_64").splitlines())
     names = set(body.split())
-    for n in PACKAGES:
-        assert n not in names, "%s must NOT be in config/packages.x86_64 before Phase 9" % n
+    for n in ALL_PACKAGES:
+        assert n not in names, \
+            "%s must NOT be in config/packages.x86_64 before Phase 11" % n
     for dep in ("python", "python-gobject", "fakeroot"):
         assert dep in names, "Phase 8 runtime dependency missing from ISO: %s" % dep
-    ok("packages.x86_64: 0 ar0x-* packages (Phase 9), 3 runtime deps present")
+    ok("packages.x86_64: 0/8 ar0x-* packages (Phase 11 gate), 3 runtime deps present")
 
-
-# ---------------------------------------------------------------------------
-# Section 8: entry point
-# ---------------------------------------------------------------------------
 
 def run_checks(source_root):
     root = Path(source_root)
-    print("=== ar0x Phase 8 structural validation ===")
-    for pkg in PACKAGES:
+    print("=== ar0x Phase 8+9 structural validation ===")
+    for pkg in ALL_PACKAGES:
         validate_pkgbuild(root, pkg)
     validate_desktop(root, "ar0x-info", "ar0x-info.desktop")
     validate_desktop(root, "ar0x-update", "ar0x-update.desktop")
@@ -342,11 +397,16 @@ def run_checks(source_root):
     validate_versions_parity(root)
     validate_groups(root)
     validate_sources(root)
-    validate_deferred(root)
-    validate_no_repo_packages_yet(root)
-    print("[ OK ] Phase 8 structural validation PASSED")
+    validate_phase9_packages(root)
+    validate_ownership(root)
+    validate_iso_package_policy(root)
+    print("[ OK ] Phase 8+9 structural validation PASSED")
     return 0
 
+
+# ---------------------------------------------------------------------------
+# Section 8: entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

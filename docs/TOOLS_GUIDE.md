@@ -316,22 +316,33 @@ difference, and 18/18 checksums across the three PKGBUILDs.
 
 ## 8. Packaging: what is built and what is deferred
 
+> **Phase 9 UPDATE (2026-11-07): RESOLVED.** This section is retained as the
+> Phase 8 snapshot. ADR-024 "ONE OWNER PER PATH" has since written real
+> PKGBUILDs for all FIVE packages below. The airootfs overlay keeps its 92
+> ISO-owned paths; the packages install `/usr/share/ar0x/<pkg>/**` reference
+> trees + `/usr/bin/ar0x-apply-*` helpers instead. All 8 PKGBUILDs now carry
+> 57/57 SHA-256 sums and `validate_ownership()` proves `0/8` overlay paths.
+> See `docs/REPO_GUIDE.md §1.4` — the guide for the CURRENT state.
+
 | Package | Phase | Contents | Depends |
 |---|---|---|---|
 | `ar0x-info` | 8 ✅ | `/usr/bin/ar0x-info`, `.desktop`, `/usr/share/ar0x/info/**` | `bash coreutils grep gawk`; `fastfetch` optional |
 | `ar0x-update` | 8 ✅ | `/usr/bin/ar0x-update`, `.desktop`, `/etc/ar0x/update.conf` | `bash coreutils pacman fakeroot polkit grep gawk` |
 | `ar0x-welcome` | 8 ✅ | GTK4 app, `.desktop`, CSS, 2 tables, 2 units, 2 helpers, scriptlet | `python python-gobject gtk4 polkit apparmor hicolor-icon-theme ar0x-info ar0x-update` |
-| `ar0x-theme` | 9 ⏳ | GTK3/GTK4, Qt5/Qt6, icons, cursors, fontconfig | ownership decision |
-| `ar0x-wallpapers` | 9 ⏳ | 3× 4K wallpapers + GRUB/Plymouth/SDDM art + `ar0x-logo` icon | ownership decision |
-| `ar0x-hypr-config` | 9 ⏳ | `/etc/skel/.config/hypr/**` (Lua) | ownership decision |
-| `ar0x-keyring` | 9 ⏳ | GPG public key + pacman trust | needs offline key `R1` |
-| `ar0x-meta` | 9 ⏳ | meta-package | needs all of the above |
+| `ar0x-theme` | 9 ✅ | `/usr/share/ar0x/theme/**` + `ar0x-apply-theme` | `bash coreutils` |
+| `ar0x-wallpapers` | 9 ✅ | `/usr/share/ar0x/wallpapers/**` + `ar0x-apply-wallpapers` | `bash coreutils` |
+| `ar0x-hypr-config` | 9 ✅ | `/usr/share/ar0x/hypr-config/**` (Lua-only) + `ar0x-apply-hypr-config` | `bash coreutils` |
+| `ar0x-keyring` | 9 ✅ | `/usr/share/pacman/keyrings/ar0x*` + `--populate ar0x` | `pacman gnupg`; ⚠️ MANUAL keygen |
+| `ar0x-meta` | 9 ✅ | `/usr/share/doc/ar0x-meta/RELEASE` | the other 7 |
 
-Each `packages/*/README.md` documents the deferral. **Why**: their sources
-already exist in `config/desktop/**`, `config/branding/**` and `assets/**` and
-are installed into the live ISO by the Phase 6/7 `--sync` chains. A second
-package owning the same `/etc/skel/**` paths would break `pacman -U`. Phase 9
-must record ONE owner per path in `DECISIONS.md` before writing those PKGBUILDs.
+**Why the Phase 8 deferral**: their sources already exist in
+`config/desktop/**`, `config/branding/**` and `assets/**` and are installed into
+the live ISO by the Phase 6/7 `--sync` chains. A second package owning the same
+`/etc/skel/**` paths would break `pacman -U`. **Phase 9 resolution (ADR-024)**:
+ONE OWNER PER PATH is recorded in `DECISIONS.md`; the five packages now own
+`/usr/share/ar0x/<pkg>/**` instead, and the three `ar0x-apply-*` helpers copy
+into one user's XDG directories with timestamped backups. 31 canonical mirrors
+are byte-identical (`ar0x_repo.validate_mirrors()`).
 
 All three shipped PKGBUILDs use `arch=('any')`, `pkgver=0.1.0`, `pkgrel=1`,
 SPDX `GPL-3.0-or-later` for code (brand assets remain CC BY-SA 4.0 under
@@ -407,7 +418,8 @@ WiFi/audio/GPU QA, live `curl -IL` of the 5 links.
 | **RISK-020** | LOW | `makepkg -s` on missing makedepends; surfaced by Phase 9 clean-chroot CI. |
 | **RISK-042** | MEDIUM | libadwaita ignored by design; plain GTK4 CSS used instead. |
 | **RISK-047** | **HIGH** | GTK4 welcome window NEVER rendered here; structural + headless self-tests only. |
-| **RISK-048** | **HIGH** | Signed `[ar0x]` repo is Phase 9; packages are NOT on the ISO yet. |
+| **RISK-048** | **HIGH** | Signed `[ar0x]` db STILL does not exist after P9 tooling; all 8 packages are source-only, NOT on the ISO (MANUAL keygen → sign → publish). |
+| **RISK-051** | **CRITICAL** | Offline private release key: `PENDING-KEYGEN`, PR workflows have ZERO secrets, `release.yml` has a fork guard. See `docs/REPO_GUIDE.md §5`. |
 | **RISK-049** | MEDIUM | PKGBUILDs structurally validated and checksum-verified but NOT built with `makepkg`/`namcap`. |
 | **RISK-050** | LOW | 5 reserved link endpoints; `/tree/main/docs` needs the PR merged (Phase 12). |
 
@@ -416,7 +428,7 @@ WiFi/audio/GPU QA, live `curl -IL` of the 5 links.
 ## 12. Companion documents
 
 `/home/user/ar0xOS/PROJECT_PLAN.md` · `docs/architecture/BUILD_LAYOUT.md` ·
-`docs/architecture/DECISIONS.md` (ADR-023) ·
+`docs/architecture/DECISIONS.md` (ADR-023, **ADR-024**) · `docs/REPO_GUIDE.md` ·
 `docs/architecture/RISK_REGISTER.md` ·
 `docs/architecture/DEPENDENCY_GRAPH.md` ·
 `docs/architecture/COMPONENT_VERSIONS.md` · `docs/BRANDING_GUIDE.md` ·

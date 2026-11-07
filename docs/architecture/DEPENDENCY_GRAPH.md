@@ -117,19 +117,19 @@ flowchart TD
         D5["D5 wallpapers"]
         D6["D6 /etc/skel dotfiles (zsh)"]
     end
-    subgraph T["TOOLS (Phase 8 ✅ — 3 built / 5 deferred)"]
+    subgraph T["TOOLS (Phase 9 ✅ — ALL 8 PKGBUILDs)"]
         T1["T1 ar0x-welcome GTK4 (lazy gi)"]
         T2["T2 ar0x-update (non-root, SigLevel)"]
         T3["T3 ar0x-info (fastfetch + Bash)"]
         T4["T4 3 .desktop + 2 units + 2 helpers"]
-        T5["T5 3 PKGBUILDs + 18 SHA-256 (NOT built)"]
-        T6["T6 5 Phase 9 skeletons (README only)"]
+        T5["T5 8 PKGBUILDs + 57/57 SHA-256 (NOT built)"]
+        T6["T6 ADR-024 private trees + 3 appliers"]
     end
-    subgraph R["REPO"]
-        R1["R1 GPG signing keys"]
-        R2["R2 repo-add -s → ar0x.db"]
-        R3["R3 CI workflow"]
-        R4["R4 [ar0x] pacman.conf entry"]
+    subgraph R["REPO (Phase 9 ✅ tooling / MANUAL signing)"]
+        R1["R1 GPG key PENDING-KEYGEN (MANUAL)"]
+        R2["R2 repo-add -s → ar0x.db (driver ready)"]
+        R3["R3 3 CI workflows: PR-safe / build / release"]
+        R4["R4 [ar0x] pacman.conf entry (Required)"]
     end
     subgraph I["INSTALLER"]
         I1["I1 Calamares 3.4.3 build"]
@@ -272,11 +272,11 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 | 21b | D6 | `configure-desktop.sh --sync`: render `config/desktop/<tool>/**` → `skel/.config/**`, mirror `skel/**` → `/etc/skel/**`, `etc/**` → `/etc/**`, art → `/usr/share/**`; `--apply` refreshes caches + `preset-all` + `Hyprland --verify-config` | 12, 17, 19, 20, 21 |
 | 21c | V2/V3/V7 | `configure-branding.sh --sync`: mirror identity → `/etc/**` + `/usr/lib/os-release`, ASCII/SVG/icon → `/usr/share/**`, fetch configs → `/etc/skel/.config/**`; `--check` parses every SVG/PNG/XCursor back | 10, 11, 21b |
 | 22 | T1–T4 | ✅ **Phase 8 COMPLETE**: `ar0x-welcome` (GTK4, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 2 systemd units, 2 helpers, `ar0x-welcome.install`, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md` | 11, 21, 21c |
-| 23 | T5 | ⏳ **Phase 9 (ADR-023)**: 3 Phase 8 PKGBUILDs are written with real SHA-256 sums but NOT built (`makepkg` unavailable here, RISK-049); 5 more PKGBUILDs are DEFERRED (T6). Target: `makepkg -s` → 8 signed `.pkg.tar.zst` packages | 21, 22 |
-| 24 | R1 | GPG keys in `/opt/ar0x-build/keys` (mode 0700) | 3 |
-| 25 | R2 | `repo-add -s -v ar0x.db.tar.zst *.pkg.tar.zst` | 23, 24 |
-| 26 | R3 | `ci/workflows/build-packages.yml` | 25 |
-| 27 | R4 | append `[ar0x]` entry to `pacman.conf.installed` | 25 |
+| 23 | T5/T6 | ✅ **Phase 9 COMPLETE (ADR-024)**: all 8 PKGBUILDs with 57/57 SHA-256 sums (56 real + 1 MANUAL `SKIP`), `0/8` overlay-owned paths, 31 byte-identical mirrors, `ar0x-keyring` trust bootstrap. ⚠️ NOT built/signed (`makepkg`/`gpg`/`repo-add` unavailable, RISK-048/049/051). Target: MANUAL `makepkg --nodeps` → `gpg --detach-sign` → `repo-add -s -v --include-sigs` → 8 signed tarballs | 21, 22, 24 |
+| 24 | R1 | ⚠️ MANUAL GPG keys in `/opt/ar0x-build/keys/gnupg` (mode 0700); `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`, `ar0x-trusted` EMPTY (RISK-051) | 3 |
+| 25 | R2 | `tools/setup-repo.sh --sign` → `gpg --detach-sign` ×8 + `repo-add -s -v --include-sigs ar0x.db.tar.zst *.pkg.tar.zst` + `SHA256SUMS.sig`; `--verify` uses `ar0x_repo.repo_problems()` | 23, 24 |
+| 26 | R3 | 3 workflows: `validate-packages.yml` (PR-safe, ZERO secrets), `build-packages.yml` (non-root `builder`, `makepkg --nodeps` ×8, unsigned local db), `release.yml` (NEVER `pull_request`, fork guard, signing) | 25 |
+| 27 | R4 | `config/repo/{repo-options.conf,pacman.conf.ar0x-entry,RELEASE_KEY_FINGERPRINT}` + `[ar0x] SigLevel = Required` FIRST in `pacman.conf.installed` (ADR-017) | 25 |
 | 28 | I1 | build Calamares 3.4.3 from the Codeberg tarball (verify SHA256 + `.asc`) | 27 |
 | 29 | I2/I3 | `settings.conf`, module configs, ar0x branding module | 11, 28 |
 | 30 | I4 | `minimal / standard / full` package-select groups | 27 |
@@ -334,7 +334,9 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | `set -euo pipefail` added to the screenFetch art snippet | strict mode leaks into screenFetch and aborts it | explicit exemption in `validate-versions.sh` + assertion in `configure-branding.sh --check` |
 | `ar0x-screenfetch` wrapper not executable | `ar0x-screenfetch` fails at login | `--sync` chmod 0755; `--check` asserts `-x` on the profile copy |
 | An `ar0x-*` package listed in `config/packages.x86_64` before Phase 9 | ISO build fails against the frozen snapshot; no signed repo exists (RISK-048) | `ar0x_pkgbuild.validate_no_repo_packages_yet()` fails the validator; only `python`, `python-gobject`, `fakeroot` are present |
-| A PKGBUILD under the 5 Phase 9 skeletons | duplicate `/etc/skel/**` ownership → `pacman: conflicting files` (ADR-023) | `validate_deferred()` fails if any skeleton has a PKGBUILD; each has a `README.md` explaining the one-owner-per-path rule |
+| A PKGBUILD installing into `/etc/skel/**` or a Phase 6/7 `/usr/share/**` tree | duplicate ownership → `pacman: conflicting files` (ADR-024) | `ar0x_pkgbuild.validate_ownership()` asserts `OVERLAY_OWNED`; all 8 packages use `/usr/share/ar0x/<pkg>/**` + `/usr/bin/ar0x-apply-*` |
+| Secrets on a `pull_request` workflow | private release key leaked to forked PR code (RISK-051) | `ar0x_repo.validate_workflows()` asserts ZERO secrets in the 2 PR workflows, NO `pull_request` trigger in `release.yml`, and an explicit fork guard |
+| A stale `ar0x-public-key.asc` checksum after `--keygen` | `makepkg` checksum failure | `setup-repo.sh --sync` replaces the single `SKIP` with a real SHA-256; `ar0x_pkgbuild.py` allows `SKIP` ONLY for that one file |
 | Editing `packages/ar0x-welcome/links.conf` instead of `config/tools/links.conf` | next `--sync` silently reverts it; `AR0X_URL_*` pins drift | `configure-tools.sh --check` asserts 5 byte-identical mirrors + URL parity |
 | A stale `sha256sums` array after editing a tool | `makepkg` aborts with a checksum failure | `configure-tools.sh --sync` regenerates all 18 real SHA-256 sums; `--check` verifies each |
 | Module-level `import gi` in `ar0x-welcome.py` | `--self-test` fails on headless CI with no GTK4 (RISK-047) | `ar0x_pkgbuild.validate_sources()` asserts `gi` is lazy; `run_gui()` imports it |
@@ -347,7 +349,7 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 ```
 GATE-1 (you confirm P1) ──> P2 ──> GATE-2 ──> P3 ──> GATE-3 ──> P4 ──> GATE-4
    ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ✅ ──> GATE-8
-   ──> P9 ──> GATE-9 ──> P10 ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
+   ──> P9 ✅ ──> GATE-9 ──> P10 ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
 ```
 
 Every gate is an explicit user confirmation. No gate is auto-advanced.

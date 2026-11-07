@@ -1,0 +1,79 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/bin/ar0x-apply-theme — Phase 9 (ar0x-theme package)
+# -----------------------------------------------------------------------------
+# Copies the PACKAGE-PRIVATE reference theme tree into a single user's
+# $HOME/.config. On the ar0x ISO these files are ALREADY provided by the
+# Phase 6/7 airootfs overlay under /etc/skel, so this helper exists for
+# STOCK ARCH installs that only have `pacman -S ar0x-meta` (ADR-024).
+#
+# ⚠️ NEVER writes to /etc/skel or any system path: ONE OWNER PER PATH.
+# A timestamped backup is created before any file is overwritten.
+# No root, no network, no external tools beyond coreutils.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: paths --------------------------------------------------------
+REF_DIR="${AR0X_THEME_REFDIR:-/usr/share/ar0x/theme}"
+DEST_DIR="${AR0X_THEME_DESTDIR:-${XDG_CONFIG_HOME:-$HOME/.config}}"
+BACKUP_DIR="${DEST_DIR}/ar0x-backups/$(date -u +%Y%m%dT%H%M%SZ)"
+
+usage() {
+    cat <<'USAGE'
+ar0x-apply-theme — install the ar0x reference theme into your HOME.
+
+  (no option)   Copy the reference tree into $XDG_CONFIG_HOME (default ~/.config).
+  --list        Print the reference files and exit (no writes).
+  --help        This help.
+
+Overrides (useful for CI / testing):
+  AR0X_THEME_REFDIR   reference tree   (default /usr/share/ar0x/theme)
+  AR0X_THEME_DESTDIR  destination      (default $XDG_CONFIG_HOME or ~/.config)
+USAGE
+}
+
+# --- Section 2: option parsing -----------------------------------------------
+MODE='apply'
+while (( $# > 0 )); do
+    case "$1" in
+        --list) MODE='list' ;;
+        -h|--help) usage; exit 0 ;;
+        *) printf 'ar0x-apply-theme: unknown option: %s\n' "$1" >&2; usage; exit 2 ;;
+    esac
+    shift
+done
+
+[[ -d "$REF_DIR" ]] || { printf 'ar0x-apply-theme: reference tree missing: %s\n' "$REF_DIR" >&2; exit 1; }
+
+# --- Section 3: file manifest ------------------------------------------------
+# Relative paths are identical to the canonical config/desktop/<tool>/ layout.
+FILES=(
+    gtk-3.0/settings.ini:gtk-3.0/settings.ini
+    gtk-3.0/gtk.css:gtk-3.0/gtk.css
+    gtk-4.0/settings.ini:gtk-4.0/settings.ini
+    gtk-4.0/gtk.css:gtk-4.0/gtk.css
+    qt5ct/qt5ct.conf:qt5ct/qt5ct.conf
+    qt6ct/qt6ct.conf:qt6ct/qt6ct.conf
+    fontconfig/99-ar0x-fonts.conf:fontconfig/conf.d/99-ar0x-fonts.conf
+)
+
+if [[ "$MODE" == 'list' ]]; then
+    for pair in "${FILES[@]}"; do printf '%s\n' "$REF_DIR/${pair%%:*}"; done
+    exit 0
+fi
+
+# --- Section 4: backup + copy ------------------------------------------------
+for pair in "${FILES[@]}"; do
+    src="$REF_DIR/${pair%%:*}"
+    dst="$DEST_DIR/${pair##*:}"
+    [[ -f "$src" ]] || { printf 'ar0x-apply-theme: missing reference file: %s\n' "$src" >&2; exit 1; }
+    if [[ -e "$dst" ]]; then
+        mkdir -p -- "$BACKUP_DIR/$(dirname -- "${pair##*:}")"
+        cp -a -- "$dst" "$BACKUP_DIR/${pair##*:}"
+    fi
+    mkdir -p -- "$(dirname -- "$dst")"
+    cp -f -- "$src" "$dst"
+    printf '[ OK ] %s\n' "$dst"
+done
+printf 'ar0x-apply-theme: done. Backup (if any): %s\n' "$BACKUP_DIR"
