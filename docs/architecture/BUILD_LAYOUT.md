@@ -45,6 +45,8 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── KERNEL_BOOT.md                          # Phase 4 — kernel policy + boot branding
 │   ├── SYSTEM_CONFIG.md                        # Phase 5 — core system config guide
 │   ├── DESKTOP_GUIDE.md                        # Phase 6 — desktop + theme guide
+│   ├── BRANDING_GUIDE.md                       # Phase 7 — identity + art guide
+│   ├── TOOLS_GUIDE.md                          # Phase 8 — custom tools + packaging guide
 │   ├── KERNEL_CONFIG_NOTES.md                  # Phase 4
 │   ├── INSTALLER_FLOW.md                       # Phase 10 — step-by-step Calamares test
 │   ├── TESTING_CHECKLIST.md                    # Phase 11
@@ -125,6 +127,10 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │   ├── fastfetch/config.jsonc              # → /etc/skel/.config/fastfetch/
 │   │   ├── neofetch/config.conf                # → /etc/skel/.config/neofetch/
 │   │   └── screenfetch/ar0x-screenfetch.sh     # → /usr/local/bin/ar0x-screenfetch
+│   ├── tools/                                 # Phase 8 ✅ CANONICAL tool configs
+│   │   ├── links.conf                         # 5 URL pins (AR0X_URL_* parity)
+│   │   ├── extra-groups.conf                  # 4 official-package groups
+│   │   └── update.conf                        # → /etc/ar0x/update.conf (backup=())
 │   ├── calamares/                              # Phase 10
 │   │   ├── settings.conf                       # → /etc/calamares/settings.conf
 │   │   ├── branding/ar0x/branding.desc         # → /usr/share/calamares/branding/ar0x/
@@ -168,15 +174,19 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── cursors/ar0x-cursors/{index.theme,cursor.theme,README.md}  # TEXT canonical only
 │   └── ascii/README.md                         # canonical art is in config/branding/
 │
-├── packages/                                   # Phase 8 — PKGBUILDs
-│   ├── ar0x-welcome/{PKGBUILD,ar0x-welcome.py,ar0x-welcome.desktop,ar0x-firstboot.service}
-│   ├── ar0x-update/{PKGBUILD,ar0x-update,ar0x-update.desktop}
-│   ├── ar0x-info/{PKGBUILD,ar0x-info,ar0x-info.desktop}
-│   ├── ar0x-theme/{PKGBUILD,...}
-│   ├── ar0x-wallpapers/{PKGBUILD,...}
-│   ├── ar0x-hypr-config/{PKGBUILD,...}
-│   ├── ar0x-keyring/{PKGBUILD,ar0x.gpg}
-│   └── ar0x-meta/PKGBUILD
+├── packages/                                   # Phase 8 ✅ 3 built + 5 P9 skeletons
+│   ├── README.md                               # ownership / deferral index
+│   ├── ar0x-info/                              # ✅ PKGBUILD, ar0x-info, *.desktop,
+│   │   │                                      #    fastfetch.jsonc, ar0x-*.txt, README.md
+│   ├── ar0x-update/                            # ✅ PKGBUILD, ar0x-update, *.desktop,
+│   │   │                                      #    update.conf, README.md
+│   ├── ar0x-welcome/                           # ✅ PKGBUILD, ar0x-welcome.py, *.desktop,
+│   │   │                                      #    *.css, links.conf, extra-groups.conf,
+│   │   │                                      #    ar0x-{welcome,firstboot}.service,
+│   │   │                                      #    ar0x-firstboot, ar0x-apparmor-ctl,
+│   │   │                                      #    ar0x-welcome.install, README.md
+│   └── {ar0x-theme,ar0x-wallpapers,ar0x-hypr-config,
+│         ar0x-keyring,ar0x-meta}/README.md     # ⏳ Phase 9 — NO PKGBUILD yet (ADR-023)
 │
 ├── tools/                                      # ALL scripts: #!/bin/bash + set -euo pipefail
 │                                                # (SOURCED snippets are exempt: see §6)
@@ -193,6 +203,8 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── lib/ar0x_xcursor.py                      # Phase 7 — Xcur writer + self-verifier
 │   ├── gen-branding-assets.sh                   # Phase 7 — logo PNGs + XCursor theme
 │   ├── configure-branding.sh                    # Phase 7 — --check/--sync/--apply
+│   ├── lib/ar0x_pkgbuild.py                     # Phase 8 — pure-stdlib PKGBUILD validator
+│   ├── configure-tools.sh                       # Phase 8 — --check/--sync/--self-test/--build
 │   ├── setup-repo.sh                            # Phase 9
 │   ├── build-iso.sh                             # Phase 11 — master orchestrator
 │   ├── checksum.sh                              # Phase 11
@@ -298,6 +310,11 @@ logic other than the three explicit renames below:
 | `assets/sddm/ar0x/**` | `/usr/share/sddm/themes/ar0x/**` |
 | `assets/wallpapers/**` | `/usr/share/backgrounds/ar0x/**` |
 | `archiso/airootfs/**` | `/**` (archiso native overlay) |
+| `config/tools/{links,extra-groups}.conf` | `/usr/share/ar0x/welcome/{links,extra-groups}.conf` (via `packages/ar0x-welcome/`) |
+| `config/tools/update.conf` | `/etc/ar0x/update.conf` (`backup=()`, via `packages/ar0x-update/update.conf`) |
+| `config/branding/ascii/**` | `/usr/share/ar0x/info/{ar0x-ascii,ar0x-fastfetch}.txt` (via `packages/ar0x-info/`) |
+| `config/branding/fastfetch/config.jsonc` | `/usr/share/ar0x/info/fastfetch.jsonc` (DERIVED: header + `logo.source` only) |
+| `packages/ar0x-*/PKGBUILD` | `/usr/bin/ar0x-*`, `/usr/share/applications/ar0x-*.desktop`, `/usr/lib/{systemd,ar0x}/**` |
 
 **Consequence:** a config file that must appear at
 `/etc/NetworkManager/conf.d/10-ar0x.conf` lives at
@@ -313,6 +330,22 @@ states the full destination path so nothing is ambiguous. Phase 7 ADDED a
 Xcursor BINARIES are the one exception: `tools/gen-branding-assets.sh` writes
 them directly into `archiso/airootfs/usr/share/icons/ar0x-cursors/cursors/`
 (single binary copy), and `--check` parses them back rather than comparing bytes.
+
+Phase 8 ADDS a **third** mapping rule: anything under `config/tools/**` and the
+two `config/branding/ascii/*.txt` files is CANONICAL, and
+`tools/configure-tools.sh --sync` writes byte-identical mirrors into
+`packages/ar0x-*/`. `fastfetch.jsonc` is the single DERIVED exception (only the
+header comment and `logo.source` change, because the package owns its art).
+`--sync` also refreshes all 18 real SHA-256 sums in the three PKGBUILDs and
+installs a disposable prefix at `build/tools-prefix/` (gitignored). `--check`
+asserts 5 byte-identical pairs + the derivation-only difference via
+`tools/lib/ar0x_pkgbuild.py`. Full installed paths: `docs/TOOLS_GUIDE.md §7`.
+
+⚠️ **ONE OWNER PER PATH (ADR-023):** the three Phase 8 packages are NOT copied
+into `archiso/airootfs/**` and NOT listed in `config/packages.x86_64`. They will
+arrive from the signed `[ar0x]` repo in Phase 9. The five remaining packages are
+deferred because their `/etc/skel/**` paths are already owned by the Phase 6/7
+airootfs overlay — a second owner would cause `pacman: conflicting files`.
 
 ---
 
@@ -356,7 +389,11 @@ may have written back into the checkout (e.g. `archiso/pacman.conf`).
 ## 7. What is deliberately NOT in this tree
 
 - No `node_modules/`, no `venv/`, no compiled binaries — `ar0x-welcome` is pure Python + GTK4
-  installed from a PKGBUILD, never vendored into Git.
+  installed from a PKGBUILD, never vendored into Git. Its `gi` import is LAZY so
+  `--self-test` works headless on a host with no GTK4.
+- No PKGBUILD for the five Phase 9 packages (`ar0x-theme`, `ar0x-wallpapers`,
+  `ar0x-hypr-config`, `ar0x-keyring`, `ar0x-meta`) — only a deferral README each.
+  Writing one now would duplicate the ISO overlay's `/etc/skel/**` ownership.
 - No ISO files, no `.pkg.tar.zst`, no squashfs images — all git-ignored (`.gitignore`).
 - No private keys, ever. `keys/` lives only in BUILD ROOT.
 - No `hyprland.conf` anywhere. ⚠️ Hyprland 0.57 requires `hyprland.lua`; a stray `.conf` is a

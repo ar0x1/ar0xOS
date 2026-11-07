@@ -28,7 +28,7 @@ flowchart TD
         P6["P6 Hyprland Lua + themes + skel"]
     end
     subgraph G5["Phase 8-9 — ar0x software"]
-        P8["P8 ar0x-welcome / update / info + PKGBUILDs"]
+        P8["P8 ar0x-welcome / update / info + PKGBUILDs ✅"]
         P9["P9 signed [ar0x] repo + CI"]
     end
     subgraph G6["Phase 10 — Installer"]
@@ -117,12 +117,13 @@ flowchart TD
         D5["D5 wallpapers"]
         D6["D6 /etc/skel dotfiles (zsh)"]
     end
-    subgraph T["TOOLS"]
-        T1["T1 ar0x-welcome GTK4"]
-        T2["T2 ar0x-update"]
-        T3["T3 ar0x-info"]
-        T4["T4 .desktop files + first-boot unit"]
-        T5["T5 PKGBUILDs → .pkg.tar.zst"]
+    subgraph T["TOOLS (Phase 8 ✅ — 3 built / 5 deferred)"]
+        T1["T1 ar0x-welcome GTK4 (lazy gi)"]
+        T2["T2 ar0x-update (non-root, SigLevel)"]
+        T3["T3 ar0x-info (fastfetch + Bash)"]
+        T4["T4 3 .desktop + 2 units + 2 helpers"]
+        T5["T5 3 PKGBUILDs + 18 SHA-256 (NOT built)"]
+        T6["T6 5 Phase 9 skeletons (README only)"]
     end
     subgraph R["REPO"]
         R1["R1 GPG signing keys"]
@@ -270,8 +271,8 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 | 21 | D5 | SDDM Qt6 QML theme (`Main.qml`, `metadata.desktop`, `theme.conf`, bg.png) + `/etc/sddm.conf.d/10-ar0x.conf` | 10, 17, 18 |
 | 21b | D6 | `configure-desktop.sh --sync`: render `config/desktop/<tool>/**` → `skel/.config/**`, mirror `skel/**` → `/etc/skel/**`, `etc/**` → `/etc/**`, art → `/usr/share/**`; `--apply` refreshes caches + `preset-all` + `Hyprland --verify-config` | 12, 17, 19, 20, 21 |
 | 21c | V2/V3/V7 | `configure-branding.sh --sync`: mirror identity → `/etc/**` + `/usr/lib/os-release`, ASCII/SVG/icon → `/usr/share/**`, fetch configs → `/etc/skel/.config/**`; `--check` parses every SVG/PNG/XCursor back | 10, 11, 21b |
-| 22 | T1–T4 | `ar0x-welcome`, `ar0x-update`, `ar0x-info`, `.desktop`, first-boot unit | 11, 21 |
-| 23 | T5 | `makepkg -s` → 8 signed `.pkg.tar.zst` packages | 21, 22 |
+| 22 | T1–T4 | ✅ **Phase 8 COMPLETE**: `ar0x-welcome` (GTK4, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 2 systemd units, 2 helpers, `ar0x-welcome.install`, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md` | 11, 21, 21c |
+| 23 | T5 | ⏳ **Phase 9 (ADR-023)**: 3 Phase 8 PKGBUILDs are written with real SHA-256 sums but NOT built (`makepkg` unavailable here, RISK-049); 5 more PKGBUILDs are DEFERRED (T6). Target: `makepkg -s` → 8 signed `.pkg.tar.zst` packages | 21, 22 |
 | 24 | R1 | GPG keys in `/opt/ar0x-build/keys` (mode 0700) | 3 |
 | 25 | R2 | `repo-add -s -v ar0x.db.tar.zst *.pkg.tar.zst` | 23, 24 |
 | 26 | R3 | `ci/workflows/build-packages.yml` | 25 |
@@ -332,6 +333,11 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | A hand-written `Xcur` file with wrong TOC offsets | compositor silently falls back to Adwaita | `ar0x_xcursor.verify_xcursor()` parses magic/header/TOC/chunks/pixel count on every generated file |
 | `set -euo pipefail` added to the screenFetch art snippet | strict mode leaks into screenFetch and aborts it | explicit exemption in `validate-versions.sh` + assertion in `configure-branding.sh --check` |
 | `ar0x-screenfetch` wrapper not executable | `ar0x-screenfetch` fails at login | `--sync` chmod 0755; `--check` asserts `-x` on the profile copy |
+| An `ar0x-*` package listed in `config/packages.x86_64` before Phase 9 | ISO build fails against the frozen snapshot; no signed repo exists (RISK-048) | `ar0x_pkgbuild.validate_no_repo_packages_yet()` fails the validator; only `python`, `python-gobject`, `fakeroot` are present |
+| A PKGBUILD under the 5 Phase 9 skeletons | duplicate `/etc/skel/**` ownership → `pacman: conflicting files` (ADR-023) | `validate_deferred()` fails if any skeleton has a PKGBUILD; each has a `README.md` explaining the one-owner-per-path rule |
+| Editing `packages/ar0x-welcome/links.conf` instead of `config/tools/links.conf` | next `--sync` silently reverts it; `AR0X_URL_*` pins drift | `configure-tools.sh --check` asserts 5 byte-identical mirrors + URL parity |
+| A stale `sha256sums` array after editing a tool | `makepkg` aborts with a checksum failure | `configure-tools.sh --sync` regenerates all 18 real SHA-256 sums; `--check` verifies each |
+| Module-level `import gi` in `ar0x-welcome.py` | `--self-test` fails on headless CI with no GTK4 (RISK-047) | `ar0x_pkgbuild.validate_sources()` asserts `gi` is lazy; `run_gui()` imports it |
 | Calamares built before Qt/KPMcore present | Link/compile failure | `R4 → I1` plus Phase 2 host package check |
 
 ---
@@ -340,7 +346,7 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 
 ```
 GATE-1 (you confirm P1) ──> P2 ──> GATE-2 ──> P3 ──> GATE-3 ──> P4 ──> GATE-4
-   ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ──> GATE-8
+   ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ✅ ──> GATE-8
    ──> P9 ──> GATE-9 ──> P10 ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
 ```
 

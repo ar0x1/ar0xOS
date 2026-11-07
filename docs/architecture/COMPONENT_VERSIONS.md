@@ -1,7 +1,7 @@
 # ar0x — Component & Version Matrix
 
 > Phase 1 companion to [`PROJECT_PLAN.md`](../../PROJECT_PLAN.md).
-> **Verified 2026-11-03.** This is the authoritative version list for Phases 2–12.
+> **Verified 2026-11-03** (Phase 8 additions verified 2026-11-07). Authoritative version list for Phases 2–12.
 > Machine-readable equivalent: [`/home/user/ar0xOS/config/versions.env`](../../config/versions.env).
 
 ---
@@ -295,6 +295,37 @@ Full detail, installed paths and the exact style rules: `docs/BRANDING_GUIDE.md`
 | Xcursor(3) | magic `Xcur`, file header 16 bytes, TOC `(type, subtype, position)`, image chunk `headerSize=36`, type `0xfffd0002`, subtype = nominal size, `width*height` packed ARGB CARD32 | X.org / Arch `Xcursor(3)` |
 | GRUB 2 gfxmenu | percent-based `top`/`height` in `theme.txt`; `boot_menu` and `progress_bar` (`id="__timeout__"`) | GRUB manual theme-file format |
 
+**Phase 8 tool matrix (no upstream binary versions — these are OUR sources):**
+
+| Component | Version / pin | Source | Verification |
+|---|---|---|---|
+| `ar0x-welcome` | `0.1.0-1`, `dev.ar0x.Welcome` | `packages/ar0x-welcome/PKGBUILD` + `ar0x-welcome.py` | `ar0x_pkgbuild.py`: AST, GTK4 `require_version`, lazy `gi`, 8 CSS pins, 5 https links |
+| `ar0x-update` | `0.1.0-1`, `[ar0x] SigLevel=Required` | `packages/ar0x-update/PKGBUILD` + `ar0x-update` | `--self-test`: root refusal, insecure SigLevel rejection, isolated `db.sig` check, 2 pending updates, rollback parser |
+| `ar0x-info` | `0.1.0-1`, 17 `--json` keys | `packages/ar0x-info/PKGBUILD` + `ar0x-info` | `--self-test` + `--json` parsed by Python + `--plain` ASCII |
+| GTK4 / PyGObject | `gtk4`, `python-gobject` (official `[extra]`, floating) | `config/packages.x86_64` | HARD pins policy: NOT pinned for tools (they are runtime bindings, not built artefacts) |
+| `fakeroot` | via `base-devel`, declared explicitly | `config/packages.x86_64` | required by the temporary-dbpath `--check` algorithm |
+| `python` | official `[core]`, floating | `config/packages.x86_64` | `#!/usr/bin/env python3`, stdlib-only for `--self-test` |
+| `AR0X_TOOLS_VERSION` | `0.1.0` == `AR0X_VERSION` | `config/versions.env` | both validators assert equality |
+| `AR0X_URL_*` | 5 RESERVED https endpoints (RISK-050) | `config/versions.env` + `config/tools/links.conf` | `--check` asserts byte-parity |
+| PKGBUILD checksums | 18 real SHA-256 (5 + 3 + 10) | 3 `PKGBUILD` files | `configure-tools.sh --sync` regenerates; `--check` verifies |
+
+⚠️ The three tool packages are `arch=('any')` with LOCAL `source=()` arrays;
+no upstream tarball, no VCS source, no network and no AUR. They are therefore
+immune to the frozen `2026/11/01` snapshot drift (RISK-010). ⚠️ They were
+NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
+
+**Phase 8 API facts used (verified 2026-11-07):**
+
+| API / behaviour | Verified fact | Source |
+|---|---|---|
+| GTK4 CSS | `CssProvider.load_from_path()` + `Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, STYLE_PROVIDER_PRIORITY_APPLICATION)`; `load_from_data` deprecated | PyGObject Gtk-4.0 `CssProvider` docs |
+| GTK4 links | `Gtk.LinkButton.new_with_label(uri, label)` exists; uses `gtk_show_uri` | docs.gtk.org/gtk4 `LinkButton` |
+| GIO subprocess | `Gio.Subprocess.new(argv, STDOUT_PIPE\|STDERR_PIPE)` + `communicate_utf8_async()/finish()` avoids blocking the UI loop | gjs.guide GIO subprocess guide |
+| `checkupdates` | `fakeroot` + temp `CHECKUPDATES_DB` + symlink `${DBPath}/local` + `pacman -Sy --dbpath` + `pacman -Qu`; never a bare `pacman -Sy` | `kyrias/pacman-contrib` `checkupdates.sh.in` |
+| `pacman.conf(5)` | default `SigLevel = Required TrustedOnly`; `Optional`/`TrustAll`/`Never` are unsafe for `[ar0x]` | pacman.conf man page |
+| `python-gobject` | official Arch `[extra]` package, Python 3 GLib/GObject/GIO/GTK bindings | archlinux.org/packages/extra/x86_64/python-gobject |
+| `fakeroot` | expected via `base-devel`; NOT an explicit dependency of `pacman`/`pacman-contrib` | Arch BBS + StackOverflow |
+
 **Phase 7 multipliers:** master SVG `viewBox="0 0 512 512"`, wordmark
 `viewBox="0 0 1024 256"`, 8 hex pins shared with `config/versions.env`,
 5 authored XCursor shapes × 3 nominal sizes (24/32/48) + 12 aliases,
@@ -327,6 +358,22 @@ Full detail, installed paths and the exact style rules: `docs/BRANDING_GUIDE.md`
    `tools/lib/ar0x_logo.py`, ASCII `$N` parity, 5 XCursor files parsed back with
    12 aliases, `/etc` identity mirrors, `XCURSOR_THEME=ar0x-cursors`, and
    `screenfetch` present / `neofetch` absent in `packages.x86_64`.
+8. (Phase 8) Assert all 31 Phase 8 deliverables + 5 deferral READMEs;
+   `AR0X_TOOLS_VERSION == AR0X_VERSION`; `[ar0x] SigLevel = Required`;
+   `ConditionFirstBoot=yes`; then delegate to
+   `tools/lib/ar0x_pkgbuild.py` for 18/18 SHA-256 sums, 3 `package()` bodies,
+   3 `.desktop` files, 2 systemd units, 5 byte-identical mirrors, 1
+   derivation-only `fastfetch.jsonc`, 5 URL pins, 8 CSS hex pins, 4 groups /
+   23 official packages with zero AUR, lazy `gi`, zero `shell=True`,
+   5 skeletons with zero premature PKGBUILDs, and zero `ar0x-*` packages in
+   `config/packages.x86_64` while `python`/`python-gobject`/`fakeroot` are present.
+
+`tools/configure-tools.sh --check` adds `bash -n` on the 4 extensionless Phase 8
+bash executables, the 3 PKGBUILDs, the SOURCED `ar0x-welcome.install` scriptlet
+and the driver itself, plus Python AST checks. `--self-test` RUNS all three
+tools offline from `build/tools-prefix/`. ⚠️ `makepkg`, `namcap`,
+`shellcheck`, `desktop-file-validate` and `systemd-analyze verify` remain
+manual gates on a real Arch host.
 
 On the real build host, Phase 3 additionally generates `packages.lock` from `pacman -Q` inside
 `$AR0X_WORK_DIR/x86_64/airootfs`. That lockfile, plus the frozen mirror date, is what makes

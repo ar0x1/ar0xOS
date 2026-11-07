@@ -12,6 +12,16 @@ enable plymouth-quit-wait.service
 # `preset-all` is re-run by tools/configure-desktop.sh --apply.
 enable sddm.service
 
+# ⚠️ Phase 8: ar0x-firstboot.service is DELIBERATELY NOT listed here.
+# This preset is the single owner of LIVE-ISO system service state; the three
+# ar0x tool packages are NOT installed on the ISO until Phase 9/10, so adding it
+# would make `systemctl preset-all` emit "unit file not found".
+# Calamares `finished` (Phase 10) arms the unit on the TARGET:
+#   systemctl --root=/mnt enable ar0x-firstboot.service
+# and regenerates /etc/machine-id so ConditionFirstBoot=yes fires.
+# The USER unit ar0x-welcome.service is enabled by ar0x-welcome.install via a
+# plain symlink (no D-Bus in a chroot). See docs/TOOLS_GUIDE.md §3.
+
 # ⚠️ Two DHCP clients fighting over one link is a classic broken-network bug.
 disable systemd-networkd.service
 disable systemd-networkd-wait-online.service

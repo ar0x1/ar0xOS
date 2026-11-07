@@ -1,0 +1,95 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/lib/ar0x/ar0x-apparmor-ctl
+# SOURCE: /home/user/ar0xOS/packages/ar0x-welcome/ar0x-apparmor-ctl
+# -----------------------------------------------------------------------------
+# PHASE 8 — RISK-008 opt-in helper called ONLY through pkexec from the
+# ar0x-welcome "AppArmor enforcing" switch.
+#
+#   status    (no root) print "enforce" or "complain" and exit 0
+#   enforce   ⚠️ ROOT: aa-enforce every /etc/apparmor.d/* profile, set marker
+#   complain  ⚠️ ROOT: aa-complain every profile, clear marker (ONE-COMMAND REVERT)
+#   --dry-run (no root) list the profiles that would be changed
+#   --help
+#
+# ⚠️ WARNING: AppArmor enforcing on a Hyprland/Wayland stack can silently break
+#    xdg-desktop-portal screen sharing, screenshots and GPU helpers (RISK-008).
+#    v0.1 ships `complain` by default. Test screen sharing BEFORE enabling and
+#    revert immediately with:  pkexec /usr/lib/ar0x/ar0x-apparmor-ctl complain
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+readonly MARKER='/etc/apparmor/ar0x-enforce'
+readonly PROFILE_GLOB='/etc/apparmor.d/*'
+
+log()  { printf 'ar0x-apparmor-ctl: %s\n' "$*"; }
+warn() { printf 'ar0x-apparmor-ctl: ⚠️  %s\n' "$*" >&2; }
+die()  { printf 'ar0x-apparmor-ctl: ERROR: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+    cat <<'USAGE'
+ar0x-apparmor-ctl 0.1.0 — RISK-008 opt-in switch
+
+  status                 report enforce|complain (no root)
+  --dry-run              list profiles that would change (no root)
+  enforce                ⚠️ ROOT: aa-enforce all profiles
+  complain               ⚠️ ROOT: aa-complain all profiles (one-command revert)
+  --help                 this help
+
+Never run `enforce` unattended. Revert: pkexec /usr/lib/ar0x/ar0x-apparmor-ctl complain
+USAGE
+}
+
+# --- Section 1: profile discovery --------------------------------------------
+profiles() {
+    shopt -s nullglob
+    local -a all=( $PROFILE_GLOB )
+    shopt -u nullglob
+    local f
+    for f in "${all[@]}"; do
+        [[ -f "$f" ]] && printf '%s\n' "$f"
+    done
+}
+
+# --- Section 2: status -------------------------------------------------------
+do_status() {
+    if [[ -f "$MARKER" ]]; then printf 'enforce\n'; else printf 'complain\n'; fi
+}
+
+# --- Section 3: enforce / complain -------------------------------------------
+apply_mode() {
+    local mode="$1" helper
+    (( EUID == 0 )) || die "Requires root. Use: pkexec $0 ${mode}"
+    case "$mode" in
+        enforce)  helper='aa-enforce' ;;
+        complain) helper='aa-complain' ;;
+        *) die "Unknown mode: ${mode}" ;;
+    esac
+    command -v "$helper" >/dev/null 2>&1 || die "${helper} not found (install the apparmor package)."
+    local -a ps=()
+    mapfile -t ps < <(profiles)
+    (( ${#ps[@]} > 0 )) || die "No AppArmor profiles found under /etc/apparmor.d/."
+    warn "RISK-008: about to run '${helper}' on ${#ps[@]} profile(s)."
+    warn 'This can break xdg-desktop-portal screen sharing, screenshots and GPU helpers.'
+    if [[ "$mode" == 'enforce' ]]; then
+        warn 'If anything breaks, revert with: pkexec /usr/lib/ar0x/ar0x-apparmor-ctl complain'
+    fi
+    "$helper" "${ps[@]}"
+    if [[ "$mode" == 'enforce' ]]; then
+        mkdir -p -- "$(dirname -- "$MARKER")"
+        printf 'enforce\n' > "$MARKER"; chmod 0644 -- "$MARKER"
+    else
+        rm -f -- "$MARKER"
+    fi
+    log "AppArmor is now in ${mode} mode (${#ps[@]} profiles)."
+}
+
+# --- Section 4: dispatch -----------------------------------------------------
+case "${1:-}" in
+    status)            do_status ;;
+    --dry-run)         profiles; log "(dry-run; no profiles changed)" ;;
+    enforce|complain)  apply_mode "$1" ;;
+    -h|--help|'')      usage ;;
+    *)                 die "Unknown option: $1 (try --help)." ;;
+esac

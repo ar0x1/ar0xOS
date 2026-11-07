@@ -1,0 +1,51 @@
+/* /usr/share/ar0x/welcome/ar0x-welcome.css — ar0x-welcome GTK4 stylesheet
+ * ---------------------------------------------------------------------------
+ * PHASE 8. Plain Gtk.Application + Gtk.CssProvider, NOT libadwaita: GTK4
+ * libadwaita hard-codes Adwaita and ignores custom colours (RISK-042).
+ * The eight @define-color values are the ADR-015 pins from config/versions.env;
+ * tools/configure-tools.sh --check asserts all 8 are present and identical.
+ * --------------------------------------------------------------------------- */
+@define-color ar0x_void    #07090F;
+@define-color ar0x_surface #11151F;
+@define-color ar0x_cyan    #00E5FF;
+@define-color ar0x_magenta #FF2E88;
+@define-color ar0x_lime    #A8FF60;
+@define-color ar0x_text    #D7E0EE;
+@define-color ar0x_muted   #6B7891;
+@define-color ar0x_alert   #FF5C57;
+
+window {
+  background-color: @ar0x_void;
+  color: @ar0x_text;
+}
+
+.ar0x-title { font-size: 26px; font-weight: 700; color: @ar0x_cyan; }
+.ar0x-sub   { color: @ar0x_muted; font-size: 13px; }
+.ar0x-key   { color: @ar0x_cyan; font-weight: 600; }
+.ar0x-value { color: @ar0x_text; }
+.ar0x-hint  { color: @ar0x_muted; font-size: 12px; }
+
+.ar0x-out {
+  font-family: monospace;
+  font-size: 12px;
+  color: @ar0x_lime;
+  background-color: @ar0x_surface;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+button {
+  background-color: @ar0x_surface;
+  color: @ar0x_text;
+  border: 1px solid @ar0x_muted;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+button:hover            { border-color: @ar0x_cyan; }
+button.ar0x-primary     { border-color: @ar0x_cyan; color: @ar0x_cyan; }
+button:disabled         { color: @ar0x_muted; }
+button.link, link       { color: @ar0x_cyan; }
+
+switch:checked          { background-color: @ar0x_cyan; }
+entry                   { background-color: @ar0x_surface; color: @ar0x_text; }
+separator               { background-color: @ar0x_surface; }

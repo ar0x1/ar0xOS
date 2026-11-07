@@ -2,7 +2,7 @@
 
 > Phase 1 companion to [`PROJECT_PLAN.md`](../../PROJECT_PLAN.md).
 > Each ADR records the decision, the alternatives, the tradeoff accepted, and the reversal cost.
-> Status: **ACCEPTED** unless noted. Date: 2026-11-03 (updated 2026-11-07 with ADR-022).
+> Status: **ACCEPTED** unless noted. Date: 2026-11-03 (updated 2026-11-07 with ADR-022 and ADR-023).
 
 ---
 
@@ -533,6 +533,97 @@ compiled hyprcursor theme and no neofetch package in v0.1; no
 
 ---
 
+## ADR-023 — Plain-GTK4 tools, non-root signed updates, five packages deferred to Phase 9
+
+**Status:** ACCEPTED (Phase 8). **Date:** 2026-11-07.
+
+**Decision 1 — plain `Gtk.Application`, NOT libadwaita.**
+`/usr/bin/ar0x-welcome` is a GTK4 + PyGObject application styled with
+`Gtk.CssProvider` loaded from `/usr/share/ar0x/welcome/ar0x-welcome.css`.
+libadwaita hard-codes Adwaita and ignores custom GTK4 CSS (RISK-042), which
+would erase the ADR-015 cyberpunk palette.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Plain GTK4 + CssProvider ✅** | custom CSS works; only `gtk4` + `python-gobject` (both official `[extra]`) | no `Adw.PreferencesWindow` polish |
+| libadwaita | modern widgets, less code | overrides our CSS → palette lost |
+| Qt6 / Slint | consistent with SDDM QML | another toolkit + another runtime on a Developer Edition ISO |
+| TUI (dialog/bubbletea) | headless-testable here | violates the "GUI welcome app" Phase 8 requirement |
+
+`gi` is imported **lazily** inside `run_gui()`. This is deliberate: the sandbox
+has no GTK4, no PyGObject, no display, so a module-level `import gi` would make
+`--self-test` impossible. On a real machine with `python-gobject` missing the
+app prints `sudo pacman -S gtk4 python-gobject` and exits 3 instead of crashing.
+Test hooks (`AR0X_WELCOME_DATADIR`, `AR0X_WELCOME_MARKER`, `AR0X_INFO_BIN`,
+`AR0X_UPDATE_BIN`) are read at **call time** so a disposable prefix under
+`build/tools-prefix/` can stand in for `/usr`.
+
+**Decision 2 — `ar0x-update` refuses bare root and verifies the `[ar0x]` db signature.**
+`--check` is the default and runs unprivileged: it asserts the per-repo
+`SigLevel = Required` (rejecting `Never`/`Optional`/`TrustAll`), runs an
+isolated `pacman -Sy` against a temporary `--dbpath` to verify `ar0x.db.sig`,
+then uses the `checkupdates` algorithm (temp dbpath + symlink to the real
+`local` db + `fakeroot`) for `pacman -Qu`. It never touches
+`/var/lib/pacman/sync`, so it cannot cause a partial upgrade. `--noconfirm`,
+`-Sy` alone, `--overwrite`, `-d`, `--nodeps` and `--force` are hard-rejected.
+`--upgrade` goes through `pkexec` with an explicit argv list (never
+`shell=True`) and still requires an interactive `yes`.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Signed, isolated, non-root wrapper ✅** | matches §9; polkit GUI on Wayland; no partial upgrade | ~25 lines of Bash we own; needs `fakeroot` |
+| `pacman -Sy && pacman -Qu` | trivial | ⚠️ desynchronises the db; Arch forbids partial upgrades |
+| `checkupdates` from `pacman-contrib` | upstream-maintained | still needs `fakeroot`; harder to assert a per-repo SigLevel |
+| GUI software centre (Discover/GNOME Software) | polished | huge dependency tree, pulls a second DE |
+
+**Decision 3 — two first-boot units, not one.**
+A system unit cannot open a Wayland window; a user unit has no
+`ConditionFirstBoot`. `ar0x-firstboot.service` (root, oneshot,
+`ConditionFirstBoot=yes`) runs `/usr/lib/ar0x/ar0x-firstboot`, which refuses to
+proceed if any `NOPASSWD` sudoers rule survived the install (RISK-013), enables
+`ar0x-welcome.service` globally via a plain symlink (no D-Bus needed in a
+Calamares chroot), and stamps `/var/lib/ar0x/firstboot-done`. The user unit uses
+`ExecCondition` on `~/.config/ar0x/welcome-done`. Neither unit is in
+`50-ar0x.preset`: that preset is the single owner of LIVE-ISO system service
+state, and the package is not installed on the ISO until Phase 9/10.
+
+**Decision 4 — five of eight packages are deferred to Phase 9.**
+`ar0x-theme`, `ar0x-wallpapers`, `ar0x-hypr-config`, `ar0x-keyring` and
+`ar0x-meta` get a documented `README.md` skeleton but NO PKGBUILD. Their
+sources already live in `config/desktop/**`, `config/branding/**` and
+`assets/**` and are installed into the live ISO by the Phase 6/7 `--sync`
+chains. A second package owning the same `/etc/skel/**` paths would produce
+`error: failed to commit transaction (conflicting files)` during a Calamares
+install. Phase 9 must record ONE owner per path before writing those PKGBUILDs;
+`ar0x-keyring` additionally needs the offline GPG key. Consequently no
+`ar0x-*` package is in `config/packages.x86_64` in Phase 8 — only the three
+runtime dependencies `python`, `python-gobject`, `fakeroot` (RISK-048).
+
+| Option | Pros | Cons |
+|---|---|---|
+| **3 real packages + 5 skeletons ✅** | buildable today, zero ownership conflicts, honest status | `ar0x-meta` not installable until P9 |
+| All 8 PKGBUILDs now | matches §10 table literally | duplicate `/etc/skel/**` → pacman conflict; `ar0x-keyring` would need a fake key |
+| Ship tools only in the airootfs overlay, no PKGBUILDs | simplest | no post-install updates, no `pacman -S ar0x-meta` acceptance criterion |
+
+**Decision 5 — canonical configs with byte-identical mirrors and real checksums.**
+`config/tools/{links.conf,extra-groups.conf,update.conf}` are CANONICAL;
+`configure-tools.sh --sync` mirrors them into `packages/ar0x-*/` and refreshes
+18 real SHA-256 sums. `--check` enforces 5 byte-identical pairs, one
+derivation-only difference (`fastfetch.jsonc`), 5 https URLs vs `AR0X_URL_*`,
+8 CSS hex pins vs `versions.env`, 4 groups / 23 packages with zero
+AUR/`-git`/`-bin`, and zero premature `ar0x-*` ISO packages. Extras install via
+`pkexec /usr/bin/pacman -S --needed` — never `--noconfirm`, never AUR (RISK-010).
+
+**Tradeoffs accepted:** no live GTK4 render (RISK-047 HIGH); no signed repo or
+`ar0x-meta` until Phase 9 (RISK-048 HIGH); PKGBUILDs not built with
+`makepkg`/`namcap` here (RISK-049); five reserved link endpoints (RISK-050);
+no libadwaita polish; `--upgrade` has no automatic rollback.
+
+**Reversal cost:** LOW for the two CLI tools (rewrite a Bash script + refresh
+sums); MEDIUM for the welcome app (replace GTK4 with libadwaita/Qt6 and re-do
+the two units); MEDIUM for the 5 deferred packages (one-owner-per-path audit
+then 5 new PKGBUILDs).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -559,3 +650,4 @@ compiled hyprcursor theme and no neofetch package in v0.1; no
 | 020 NetworkManager + balanced hardening | developer tools keep working | less kernel lockdown than a hardened distro |
 | 021 Lua-only desktop + Qt6 SDDM | 0.57 correctness, no AUR deps, reproducible art | no custom GTK/Qt theme engine yet (deferred to `ar0x-theme` P8) |
 | 022 SVG-authoritative identity + standard XCursor | one geometry source, no compiler, RISK-040 closed | no compiled hyprcursor, no neofetch package, no live art render |
+| 023 Plain-GTK4 tools + non-root signed update + 5 packages deferred | three offline-testable tools, zero file-ownership conflicts, real SHA-256 PKGBUILDs | no `ar0x-meta` until P9, GTK4 window never rendered here (RISK-047) |

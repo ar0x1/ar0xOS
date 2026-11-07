@@ -1,0 +1,82 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/lib/ar0x/ar0x-firstboot
+# SOURCE: /home/user/ar0xOS/packages/ar0x-welcome/ar0x-firstboot
+# -----------------------------------------------------------------------------
+# PHASE 8 — ExecStart of ar0x-firstboot.service. Runs ONCE as root on the
+# installed system (never on the live ISO). It does NOT open a GUI.
+#
+# 1. RISK-013 guard: asserts that no passwordless sudoers rule leaked from the
+#    live ISO into the installed system. A failure leaves the unit FAILED and
+#    journald loudly records it — better than a silently insecure install.
+# 2. Writes /var/lib/ar0x/firstboot-done (the unit's ConditionPathExists guard).
+# 3. Enables the ar0x-welcome USER unit globally by creating the same symlink
+#    `systemctl --global enable` would create. Direct symlink = offline-safe in
+#    a Calamares chroot where no systemd manager/D-Bus is running.
+#
+# ⚠️ MANUAL: this script is invoked by systemd, not by the developer. It needs
+#    root and a finished target rootfs. Never run it on the build host.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: constants ----------------------------------------------------
+readonly STAMP='/var/lib/ar0x/firstboot-done'
+readonly USER_UNIT='/usr/lib/systemd/user/ar0x-welcome.service'
+readonly WANTS_DIR='/etc/systemd/user/graphical-session.target.wants'
+readonly AR0X_LOG_PREFIX='ar0x-firstboot:'
+
+log()  { printf '%s %s\n' "$AR0X_LOG_PREFIX" "$*"; }
+warn() { printf '%s ⚠️  %s\n' "$AR0X_LOG_PREFIX" "$*" >&2; }
+die()  { printf '%s ERROR: %s\n' "$AR0X_LOG_PREFIX" "$*" >&2; exit 1; }
+
+# --- Section 2: RISK-013 — reject passwordless sudo on the installed system ---
+assert_no_passwordless_sudo() {
+    shopt -s nullglob
+    local -a files=(/etc/sudoers /etc/sudoers.d/*)
+    shopt -u nullglob
+    local f hits=''
+    for f in "${files[@]}"; do
+        [[ -r "$f" ]] || continue
+        if grep -Eiq 'NOPASSWD' -- "$f"; then
+            hits+="  ${f}\n"
+        fi
+    done
+    if [[ -n "$hits" ]]; then
+        warn 'RISK-013: passwordless sudo is STILL configured on the installed system:'
+        printf '%b' "$hits" >&2
+        die 'Calamares removeuser/finished must remove the live-ISO sudoers rule. Refusing to finish first boot.'
+    fi
+    log 'RISK-013 guard passed: zero passwordless sudoers rules'
+}
+
+# --- Section 3: idempotency stamp --------------------------------------------
+write_stamp() {
+    mkdir -p -- "$(dirname -- "$STAMP")"
+    printf 'ar0x first boot completed %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STAMP"
+    chmod 0644 -- "$STAMP"
+    log "wrote ${STAMP}"
+}
+
+# --- Section 4: enable the per-user welcome unit ------------------------------
+enable_user_unit() {
+    [[ -f "$USER_UNIT" ]] || die "Missing ${USER_UNIT}. Install the ar0x-welcome package first."
+    mkdir -p -- "$WANTS_DIR"
+    ln -sfn -- "$USER_UNIT" "${WANTS_DIR}/ar0x-welcome.service"
+    log "enabled ${USER_UNIT} for all users (${WANTS_DIR})"
+}
+
+# --- Section 5: main ---------------------------------------------------------
+main() {
+    (( EUID == 0 )) || die 'Must run as root (systemd system unit).'
+    if [[ -f "$STAMP" ]]; then
+        log 'first boot already completed; nothing to do'
+        return 0
+    fi
+    assert_no_passwordless_sudo
+    enable_user_unit
+    write_stamp
+    log 'ar0x first boot armed. ar0x-welcome will appear on the first graphical login.'
+}
+
+main "$@"

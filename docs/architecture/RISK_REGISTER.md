@@ -18,7 +18,7 @@
 | **RISK-005** | **HIGH** | Trimming `linux-firmware` to meet the 2 GB gate breaks WiFi/GPU on real hardware | Size budget exceeded → lever #1 applied | Keep `linux-firmware-whence` and a curated subset for Intel/AMD/Realtek/Atheros; ship the full firmware in the `[ar0x]` repo as `ar0x-firmware-extras`; Phase 11 checklist **must** include a real-hardware WiFi test | P11 |
 | **RISK-006** | **MEDIUM** | Frozen `pacman.conf.build` accidentally shipped as `/etc/pacman.conf` → installed systems permanently pinned to 2026-11-01 | A single wrong `cp` in `bootstrap.sh` | Two distinct files with distinct names; `build-iso.sh` asserts installed conf contains `[ar0x]` and does **not** contain `archive.archlinux.org`; `bootstrap.sh` comments state the destination explicitly | P3/P11 |
 | **RISK-007** | ⚠️ **HIGH** | Secure Boot MOK enrollment mishandled → soft-bricked machine / boot failure | User enrolls the wrong key or loses the MOK password | SB is **optional and not enforced** in v0.1; shim path documented but requires an explicit manual decision; firmware reset procedure documented in Phase 11 | You, P4/P11 |
-| **RISK-008** | **MEDIUM** | AppArmor enforcing breaks xdg-desktop-portal → screen sharing / screenshots / GPU helpers fail | `aa-enforce` applied globally | v0.1 ships `complain`; enforcing is an opt-in in `ar0x-welcome`; test screen sharing before enabling; provide a one-command revert | P5/P8 |
+| **RISK-008** | **MEDIUM** | AppArmor enforcing breaks xdg-desktop-portal → screen sharing / screenshots / GPU helpers fail | `aa-enforce` applied globally | v0.1 ships `complain`; enforcing is an opt-in in `ar0x-welcome` via `/usr/lib/ar0x/ar0x-apparmor-ctl enforce` (marker `/etc/apparmor/ar0x-enforce`); `--dry-run` lists targets with NO root; ONE-COMMAND REVERT `pkexec /usr/lib/ar0x/ar0x-apparmor-ctl complain`; test screen sharing before enabling | P5/P8 |
 | **RISK-009** | **MEDIUM** | SDDM 0.21.0 X11 greeter fails on NVIDIA / Wayland-only setups | Proprietary NVIDIA driver + no XWayland | Include NVIDIA + SDDM in the Phase 11 GPU matrix; fallback to `greetd` + `gtkgreet` documented (v0.2); XWayland kept in the ISO | P6/P11 |
 | **RISK-010** | **LOW** | Snapshot drift despite archive pin (AUR/git-sourced packages) | Any `*-git` or AUR package in `packages.x86_64` | No AUR packages in the base ISO; Calamares/Hyprland are HARD-pinned to exact tags with checksums; `packages.lock` records every installed version | P3 |
 | **RISK-011** | **MEDIUM** | Signing key lost or leaked → `[ar0x]` updates blocked or compromised | Key stored in Git / on CI | `keys/` is mode `0700` and git-ignored; private key offline; CI uses a separate, limited repo-signing subkey; `ar0x-keyring` ships the public key; rotation procedure in Phase 9 | You, P9 |
@@ -31,7 +31,7 @@
 | **RISK-017** | **MEDIUM** | Host `archiso` drifts past `92-1` and `profiledef.sh` keys (`buildmodes`, `bootmodes`) change | Rolling host update | `setup-build-env.sh` compares `pacman -Q archiso` to the pin and warns; Phase 3 diffs `/usr/share/archiso/configs/baseline/profiledef.sh` | P2/P3 |
 | **RISK-018** | **MEDIUM** | `--no-upgrade` creates a partial upgrade; `pacman`/`pacstrap` ABI mismatch | User passes `--no-upgrade` | Default is `-Syu`; explicit warning in script + BUILD_HOST.md §6; flag documented as last resort | P2 |
 | **RISK-019** | **MEDIUM** | `work/` on `noexec`/`nodev`/NTFS/exFAT causes cryptic chroot + mknod failures | Wrong build-root filesystem | `check_mount_options` preflight fails early; troubleshooting table in BUILD_HOST.md §10 | P2 |
-| **RISK-020** | **LOW** | HARD-pinned source builds fail on missing makedepends (Hyprland has 79 deps) | Phase 8/9 `makepkg` | `makepkg -s` auto-resolves; `--prewarm-calamares` surfaces failures early; PKGBUILDs built in clean chroots | P8/P9 |
+| **RISK-020** | **LOW** | HARD-pinned source builds fail on missing makedepends (Hyprland has 79 deps) | Phase 8/9 `makepkg` | `makepkg -s` auto-resolves; `--prewarm-calamares` surfaces failures early; PKGBUILDs built in clean chroots. Phase 8 tool PKGBUILDs use LOCAL `source=()` files only (no network/VCS source), so this risk applies to the 5 deferred packages and Phase 9 CI | P8/P9 |
 
 | **RISK-021** | **HIGH** | `Include = /etc/pacman.d/mirrorlist` or wrong `CacheDir` silently bypasses the frozen snapshot | Only explicit `Server =` lines; `bootstrap.sh --check` greps for the exact archive date; archiso 92's `_make_pacman_conf` forces `HookDir` | P3 |
 | **RISK-022** | **HIGH** | Missing `mkinitcpio-archiso` or `syslinux` → unbootable ISO | `--check` asserts all 6 mandatory packages against archiso 92's own validators | P3 |
@@ -62,6 +62,10 @@
 | **RISK-044** | ⚠️ **HIGH** | Phase 7 brand art (GRUB gfxmenu, Plymouth script splash, syslinux vesamenu, XCursor shapes) was NEVER rendered on a live display in this sandbox | `configure-branding.sh --check` parses back every SVG (XML), PNG (signature + IHDR), Xcursor (magic/TOC/chunk/pixel count), JSONC and shell snippet; §8 of `BRANDING_GUIDE.md` lists exactly what was verified; QEMU UEFI+BIOS visual QA is a Phase 11 MANUAL gate | P7/P11 |
 | **RISK-045** | **LOW** | `assets/logo/ar0x-wordmark.svg` uses LIVE `<text>` in Inter; machines without Inter reflow or substitute the wordmark | Inter (`inter-font`) IS on the ISO; `BRANDING_GUIDE.md` §1.4 gives the exact Inkscape *Path → Object to Path* manual step for print/outlining | P7/P12 |
 | **RISK-046** | **LOW** | Deterministic PNG raster uses distance-to-segment (round joins) where the SVG polygon has mitre joins | SVG remains authoritative for all vector/print use; PNGs exist only for GRUB/Plymouth/syslinux/raster fallback; documented in `BRANDING_GUIDE.md` §1.9 | P7/P12 |
+| **RISK-047** | ⚠️ **HIGH** | GTK4 `ar0x-welcome` window was NEVER rendered: no GTK4, no PyGObject (`gi`), no display, no Wayland session, no QEMU/KVM and no root in this sandbox | `gi` is imported LAZILY so `--self-test` covers every pure-Python path headless; `ar0x_pkgbuild.py` validates the widget source structurally (AST, GTK4 version pin, zero `shell=True` calls, 8 CSS pins, 5 https links, 4 safe groups); `--firstboot` marker skip is tested without a GUI; **MANUAL Phase 8/11 gate**: boot the ISO, click every button, verify polkit agent + CSS palette | P8/P11 |
+| **RISK-048** | ⚠️ **HIGH** | The signed `[ar0x]` repository does not exist until Phase 9, so the three tool packages are SOURCE + PKGBUILD only — NOT installed on the live ISO; `ar0x-meta` / `ar0x-keyring` are not installable yet | `config/packages.x86_64` carries ONLY the runtime deps `python`, `python-gobject`, `fakeroot`; `ar0x_pkgbuild.py` FAILS if any `ar0x-*` package appears in the ISO list before Phase 9; `PROJECT_PLAN.md` acceptance criterion 7 is explicitly flagged as blocked; Phase 9 owns `gpg`, `repo-add -s`, CI and publication | P8/P9 |
+| **RISK-049** | **MEDIUM** | `makepkg`, `namcap`, `desktop-file-validate`, `systemd-analyze verify` and `shellcheck` are unavailable here — PKGBUILDs were NEVER built, only structurally validated | 3 PKGBUILDs pass `bash -n`; `ar0x_pkgbuild.py` verifies 18/18 REAL SHA-256 sums, `package()` installs every source, 3 `.desktop` files and 2 systemd units parse; `tools/configure-tools.sh --sync` refreshes sums; **MANUAL gate**: `AR0X_CONFIRM_BUILD=yes ./tools/configure-tools.sh --build` on a clean `archlinux:base-devel` host, then `namcap` + `shellcheck` | P8/P9 |
+| **RISK-050** | **LOW** | The five `AR0X_URL_*` link endpoints are RESERVED; `/tree/main/docs` resolves only AFTER the PR is merged | `links.conf` keeps URL pins in ONE place with `AR0X_URL_*` parity asserted by `--check`; all five are https; `Gtk.LinkButton` uses `gtk_show_uri` (no subprocess). **MANUAL Phase 12 gate**: `curl -IL` every endpoint and replace any dead one before tagging v0.1.0 | P8/P12 |
 
 ---
 
@@ -77,7 +81,7 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 5 | ⚠️ **RISK-033** (passwordless live user), RISK-032, RISK-034 (host-kernel safety), RISK-008, RISK-014, RISK-035, RISK-036, RISK-037 |
 | 6 | ⚠️ **RISK-043** (no live desktop QA), **RISK-002** (Lua-only), RISK-038, RISK-039, RISK-041, RISK-042, RISK-009; RISK-040 CLOSED in P7 |
 | 7 | ⚠️ **RISK-044** (no live art render), RISK-045 (live SVG text), RISK-046 (raster joins), **RISK-040 CLOSED**; `configure-branding.sh --apply` is ROOT-only, rebuilds initramfs + `grub.cfg`, and has NO automatic rollback |
-| 8 | RISK-013 |
+| 8 | ⚠️ **RISK-047** (GTK4 never rendered), **RISK-048** (no signed repo yet), RISK-049 (no `makepkg`/`namcap`), **RISK-013** (NOPASSWD guard), RISK-008 (AppArmor opt-in), RISK-020, RISK-042, RISK-050; `configure-tools.sh --build` is MANUAL and RISKY |
 | 9 | ⚠️ **RISK-003** (Codeberg), RISK-011 (key custody) |
 | 10 | ⚠️ **RISK-004** (destructive partitioning), RISK-013 |
 | 11 | ⚠️ **RISK-004**, RISK-005, RISK-007, RISK-009, RISK-012, RISK-015 |
@@ -101,6 +105,14 @@ These exact warnings will be repeated at the start of the corresponding phase re
 9. **Never** mix Hyprland 0.56-era `hyprlock`/`hypridle` with a 0.57 compositor (session-lock
    protocol mismatch).
 10. **Never** apply a kernel patch without a second, known-good kernel still present in the ISO.
+11. **Never** add an AUR helper, `*-git`/`*-bin` package or `--noconfirm` to `extra-groups.conf`
+    or `ar0x-update` (RISK-010 + §9 security contract) — `ar0x_pkgbuild.py` fails the build.
+12. **Never** run `ar0x-update --upgrade` as bare root, or lower `[ar0x] SigLevel` below
+    `Required` to make an unsigned repo work.
+13. **Never** ship a target system with a surviving `NOPASSWD` sudoers rule —
+    `/usr/lib/ar0x/ar0x-firstboot` fails loudly (RISK-013).
+14. **Never** put a PKGBUILD under the five Phase 9 skeletons before the ONE-OWNER-PER-PATH
+    audit (ADR-023); it would collide with the `/etc/skel/**` airootfs overlay.
 
 ---
 
@@ -113,5 +125,11 @@ v0.1 is a **developer preview**. The residual risks accepted at release are:
 - No Secure Boot enforcement and no enforcing MAC.
 - Single architecture (`x86_64`), single primary download host (GitHub Releases).
 - AppArmor policies are minimal; most processes remain unconfined.
+- The GTK4 welcome window has had NO live render QA (RISK-047); only headless
+  structural + self-test coverage exists.
+- `ar0x-meta` is not installable until Phase 9 publishes the signed `[ar0x]`
+  repo (RISK-048), and no PKGBUILD has been built with `makepkg` (RISK-049).
+- `ar0x-update --upgrade` has NO automatic rollback; `--rollback` can only reach
+  versions still present in `/var/cache/pacman/pkg/`.
 
 Each of these is a candidate for v0.2 / v1.0 in the Phase 12 roadmap.

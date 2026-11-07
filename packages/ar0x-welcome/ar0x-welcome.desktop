@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ar0x Welcome
+GenericName=Welcome & Setup
+Comment=ar0x first-boot setup, system summary, updates and extras
+Exec=/usr/bin/ar0x-welcome
+Icon=ar0x-logo
+Terminal=false
+StartupNotify=true
+Categories=System;Utility;
+Keywords=ar0x;welcome;setup;firstboot;
+StartupWMClass=dev.ar0x.Welcome

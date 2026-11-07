@@ -58,6 +58,10 @@ REQUIRED_KEYS=(
     AR0X_SECURE_BOOT AR0X_APPARMOR_MODE AR0X_CUSTOM_KERNEL_PATCHES
     AR0X_BRAND_LOGO_VIEWBOX AR0X_BRAND_WORDMARK_VIEWBOX
     AR0X_BRAND_LOGO_ICON AR0X_BRAND_CURSOR_THEME AR0X_BRAND_LICENSE
+    AR0X_TOOLS_VERSION AR0X_WELCOME_APP_ID AR0X_WELCOME_FIRSTBOOT_MARKER
+    AR0X_UPDATE_REPO AR0X_UPDATE_SIGLEVEL
+    AR0X_URL_DOCS AR0X_URL_ISSUES AR0X_URL_COMMUNITY AR0X_URL_SOURCE
+    AR0X_URL_UPSTREAM
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -193,6 +197,10 @@ REQUIRED_DIRS=(
     archiso/airootfs/usr/share/icons/hicolor/scalable/apps
     archiso/airootfs/usr/share/icons/ar0x-cursors/cursors
     archiso/airootfs/usr/local/bin
+    config/tools
+    packages/ar0x-info packages/ar0x-update packages/ar0x-welcome
+    packages/ar0x-theme packages/ar0x-wallpapers packages/ar0x-hypr-config
+    packages/ar0x-keyring packages/ar0x-meta
 )
 for d in "${REQUIRED_DIRS[@]}"; do
     [[ -d "${AR0X_SOURCE_ROOT}/${d}" ]] || fail "Missing directory: ${d}/"
@@ -481,6 +489,59 @@ if sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' "$PKGS" | grep -Fxq 'neof
 fi
 ok "Phase 7 policy gates: identity, palette, ASCII, XCursor, fetch packages"
 
+# --- Section 7h: Phase 8 custom tools + PKGBUILD policy gates ----------------
+PHASE8_FILES=(
+    config/tools/links.conf config/tools/extra-groups.conf config/tools/update.conf
+    packages/README.md
+    packages/ar0x-info/PKGBUILD packages/ar0x-info/ar0x-info
+    packages/ar0x-info/ar0x-info.desktop packages/ar0x-info/fastfetch.jsonc
+    packages/ar0x-info/ar0x-ascii.txt packages/ar0x-info/ar0x-fastfetch.txt
+    packages/ar0x-info/README.md
+    packages/ar0x-update/PKGBUILD packages/ar0x-update/ar0x-update
+    packages/ar0x-update/ar0x-update.desktop packages/ar0x-update/update.conf
+    packages/ar0x-update/README.md
+    packages/ar0x-welcome/PKGBUILD packages/ar0x-welcome/ar0x-welcome.py
+    packages/ar0x-welcome/ar0x-welcome.desktop packages/ar0x-welcome/ar0x-welcome.css
+    packages/ar0x-welcome/links.conf packages/ar0x-welcome/extra-groups.conf
+    packages/ar0x-welcome/ar0x-welcome.service packages/ar0x-welcome/ar0x-firstboot.service
+    packages/ar0x-welcome/ar0x-firstboot packages/ar0x-welcome/ar0x-apparmor-ctl
+    packages/ar0x-welcome/ar0x-welcome.install packages/ar0x-welcome/README.md
+    tools/lib/ar0x_pkgbuild.py tools/configure-tools.sh docs/TOOLS_GUIDE.md
+)
+for f in "${PHASE8_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 8 deliverable: ${f}"
+done
+for f in ar0x-theme ar0x-wallpapers ar0x-hypr-config ar0x-keyring ar0x-meta; do
+    [[ -f "${AR0X_SOURCE_ROOT}/packages/${f}/README.md" ]] \
+        || fail "Missing Phase 8 deferral README: packages/${f}/README.md"
+done
+ok "Phase 8 deliverable files present (${#PHASE8_FILES[@]} + 5 deferral READMEs)"
+
+# ADR-023: tool versions track the distro; the signed repo gate stays Required.
+[[ "${AR0X_TOOLS_VERSION}" == "${AR0X_VERSION}" ]] \
+    || fail "Phase 8: AR0X_TOOLS_VERSION must equal AR0X_VERSION."
+[[ "${AR0X_UPDATE_REPO}" == "ar0x" && "${AR0X_UPDATE_SIGLEVEL}" == "Required" ]] \
+    || fail "Phase 8: [ar0x] must use SigLevel = Required (§9 security contract)."
+grep -Fq "${AR0X_WELCOME_APP_ID}" \
+    "${AR0X_SOURCE_ROOT}/packages/ar0x-welcome/ar0x-welcome.py" \
+    || fail "Phase 8: AR0X_WELCOME_APP_ID not used by ar0x-welcome.py."
+grep -Fq 'ConditionFirstBoot=yes' \
+    "${AR0X_SOURCE_ROOT}/packages/ar0x-welcome/ar0x-firstboot.service" \
+    || fail "Phase 8: ar0x-firstboot.service lost ConditionFirstBoot=yes."
+grep -Fiq 'refuses bare root' \
+    "${AR0X_SOURCE_ROOT}/docs/TOOLS_GUIDE.md" \
+    || fail "Phase 8: security contract not documented."
+grep -Fq 'Refusing to run as bare root' \
+    "${AR0X_SOURCE_ROOT}/packages/ar0x-update/ar0x-update" \
+    || fail "Phase 8: ar0x-update lost its root refusal."
+ok "Phase 8 policy gates: versions, SigLevel, app-id, first-boot condition"
+
+# Delegate the full structural check (PKGBUILD sums, .desktop, units, parity,
+# palette, links, groups, lazy gi, zero AUR, no premature ar0x-* ISO packages)
+# to the shared Phase 8 module so both validators agree on ONE definition.
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_pkgbuild.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Phase 8 structural validation failed (tools/lib/ar0x_pkgbuild.py)."
+
 PKG_DUPES="$(sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' \
     "${AR0X_SOURCE_ROOT}/config/packages.x86_64" | sort | uniq -d)"
 if [[ -n "$PKG_DUPES" ]]; then
@@ -516,4 +577,6 @@ printf '   Desktop      : Hyprland %s (%s config)\n' "${AR0X_HYPRLAND_VERSION}" 
 printf '   Installer    : Calamares %s (%s)\n' "${AR0X_CALAMARES_VERSION}" "${AR0X_CALAMARES_SOURCE}"
 printf '   Brand        : %s logo, %s cursors, %s\n' \
     "${AR0X_BRAND_LOGO_VIEWBOX}" "${AR0X_BRAND_CURSOR_THEME}" "${AR0X_BRAND_LICENSE}"
+printf '   Tools        : %s (welcome/update/info), SigLevel %s\n' \
+    "${AR0X_TOOLS_VERSION}" "${AR0X_UPDATE_SIGLEVEL}"
 exit 0

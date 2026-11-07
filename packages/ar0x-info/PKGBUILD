@@ -1,0 +1,42 @@
+# /home/user/ar0xOS/packages/ar0x-info/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 8 — ar0x system information tool. `arch=('any')`: pure Bash + text.
+# Sources are LOCAL files in this directory (no network, no VCS, no AUR), so
+# the frozen 2026/11/01 snapshot is irrelevant to this package. Checksums are
+# real SHA-256 values asserted by tools/configure-tools.sh --check.
+# Build on an Arch host:  makepkg -s --noconfirm   (⚠️ MANUAL, Phase 9 CI)
+# -----------------------------------------------------------------------------
+pkgname=ar0x-info
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Branded ar0x system information (fastfetch wrapper with a pure-Bash ASCII fallback)"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=('bash' 'coreutils' 'grep' 'gawk')
+optdepends=(
+    'fastfetch: rich branded system report (the default mode)'
+    'ar0x-wallpapers: ar0x-logo desktop icon (Phase 9)'
+)
+source=(
+    'ar0x-info'
+    'ar0x-info.desktop'
+    'fastfetch.jsonc'
+    'ar0x-ascii.txt'
+    'ar0x-fastfetch.txt'
+)
+sha256sums=(
+    '43a0e6c0e9cff4fcf06d899257d5a6332d99d0cbe2834ef90e23042f3503aaec'
+    '2477ad7182ed7eb945470136e5f0d4f6ed94cff31d4afe92e9c86d2426ceb87c'
+    '4d9c20a68a85ae008a51dfdff9aa010a5fcb02004cd10946dd52b367dd773f02'
+    'e2f191ac47fcb86af7391e8f7c83c49464fc7b0da020a1d2a458c684e3cf38fb'
+    'a7bfc53368408c3468ab95c996d2eccca26475f21be8338058101e05ae25e01c'
+)
+
+package() {
+    install -Dm755 "$srcdir/ar0x-info"          "$pkgdir/usr/bin/ar0x-info"
+    install -Dm644 "$srcdir/ar0x-info.desktop"  "$pkgdir/usr/share/applications/ar0x-info.desktop"
+    install -Dm644 "$srcdir/fastfetch.jsonc"    "$pkgdir/usr/share/ar0x/info/fastfetch.jsonc"
+    install -Dm644 "$srcdir/ar0x-ascii.txt"     "$pkgdir/usr/share/ar0x/info/ar0x-ascii.txt"
+    install -Dm644 "$srcdir/ar0x-fastfetch.txt" "$pkgdir/usr/share/ar0x/info/ar0x-fastfetch.txt"
+}
