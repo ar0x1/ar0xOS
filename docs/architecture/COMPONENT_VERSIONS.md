@@ -239,6 +239,14 @@ essential when the Calamares GUI itself runs on a Wayland-first live session.
 Sources: <https://9to5linux.com/calamares-3-4-3-linux-graphical-installer-improves-disk-partitioning-locale>,
 <https://news.tuxmachines.org/n/2026/09/10/Calamares_3_4_3_Linux_Graphical_Installer_Improves_Disk_Partiti.shtml>.
 
+**Phase 10 configuration (ADR-026):** `config/calamares/settings.conf` targets
+exactly 3.4.3 (the 3-phase `show/exec/show` and `packagechooser` instance
+syntax are 3.4-only), asserts `AR0X_CALAMARES_VERSION=3.4.3`,
+`AR0X_CALAMARES_SOURCE=codeberg` and the 64-hex SHA256, and FAILS if the
+archived `github.com/calamares/calamares` mirror appears in any Phase 10
+config. `docs/INSTALLER_FLOW.md §7` still requires a human to verify the
+detached `.asc` with key `6D08 3784 … 56D6` before publishing to `[ar0x]`.
+
 **CI implication:** `.github/workflows/build-packages.yml` (Phase 9) must fetch from
 `codeberg.org`, which is reachable from GitHub Actions but is NOT one of this sandbox's
 allowlisted hosts — so the tarball is vendored into `assets/` or fetched on the user's own
@@ -398,6 +406,13 @@ NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
    (PR-safe / non-root build / signing-only release), and no private-key
    material or `SigLevel = Never` in any source file. Delegated to
    `tools/lib/ar0x_repo.py`.
+10. (Phase 10) Assert all 5 `AR0X_INSTALLER_*` / `AR0X_CALAMARES_*` keys,
+    all 30 Phase 10 deliverables, `initialPartitioningChoice: none`,
+    `prompt-install: true`, the `lsblk -o NAME,SIZE,MODEL,TRAN` manual gate,
+    zero archived-GitHub references, `0755` helper/driver modes and the
+    ADR-024 no-duplicate-`/etc/calamares` rule; then delegate the full
+    show/exec/show + 21 module configs + 8 palette pins + 3 official-only
+    package groups + RISK-013 finish wiring to `tools/lib/ar0x_installer.py`.
 
 `tools/setup-repo.sh --check` adds `bash -n` on all 8 PKGBUILDs, 2 `.install`
 scriptlets, 8 extensionless bash executables (including the 3 `ar0x-apply-*`

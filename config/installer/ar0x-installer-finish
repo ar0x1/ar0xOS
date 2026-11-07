@@ -1,0 +1,98 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/lib/ar0x/ar0x-installer-finish — Phase 10
+# CANONICAL SOURCE: config/calamares/ar0x-installer-finish
+# -----------------------------------------------------------------------------
+# Executed ONCE by shellprocess@ar0x-finish INSIDE the Calamares target chroot,
+# after bootloader and before umount. Never run on the build host.
+#
+#  1. Writes the systemd FIRST-BOOT sentinel `uninitialized` to /etc/machine-id
+#     so ConditionFirstBoot=yes fires on the installed system (ADR-026). The
+#     `machineid` job ran earlier and wrote a real id; we intentionally replace
+#     it — systemd generates a fresh id at first boot.
+#  2. Arms ar0x-firstboot.service with a PLAIN SYMLINK (offline-safe: no
+#     systemctl/D-Bus in a chroot). The unit ships in ar0x-welcome via the
+#     signed [ar0x] repo (Phase 11 gate); a dangling link is harmless until then.
+#  3. RISK-013: removes any surviving passwordless sudoers rule and asserts
+#     none remains. A failure aborts the install rather than shipping an
+#     insecure target.
+#  4. RISK-033/004: removes the live-ISO autologin + ar0x-live sysusers drop-in.
+#  5. Writes an install stamp for idempotency / post-mortem debugging.
+#
+# TEST HOOK: AR0X_TARGET_ROOT=<dir> redirects ALL writes into a temporary
+# prefix so tools/configure-installer.sh --self-test can really run this script
+# without root. In the real chroot AR0X_TARGET_ROOT is unset (prefix = "").
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+PREFIX="${AR0X_TARGET_ROOT:-}"
+STAMP="${PREFIX}/var/lib/ar0x/installer-finished"
+UNIT_SRC='/usr/lib/systemd/system/ar0x-firstboot.service'
+UNIT_WANTS="${PREFIX}/etc/systemd/system/multi-user.target.wants"
+
+log()  { printf 'ar0x-installer-finish: %s\n' "$*"; }
+warn() { printf 'ar0x-installer-finish: WARNING %s\n' "$*" >&2; }
+die()  { printf 'ar0x-installer-finish: ERROR %s\n' "$*" >&2; exit 1; }
+
+# --- Section 1: first-boot sentinel ------------------------------------------
+arm_first_boot() {
+    install -dm 0755 -- "${PREFIX}/etc"
+    printf 'uninitialized\n' > "${PREFIX}/etc/machine-id"
+    chmod 0444 -- "${PREFIX}/etc/machine-id"
+    install -dm 0755 -- "$UNIT_WANTS"
+    # Plain symlink, exactly like systemctl --root=... enable (no D-Bus needed).
+    ln -sfn -- "$UNIT_SRC" "${UNIT_WANTS}/ar0x-firstboot.service"
+    log 'wrote /etc/machine-id sentinel; armed ar0x-firstboot.service'
+}
+
+# --- Section 2: RISK-013 — no passwordless sudo -------------------------------
+assert_no_passwordless_sudo() {
+    # Remove the live-only grant if it was copied into the target.
+    /usr/bin/rm -f -- "${PREFIX}/etc/sudoers.d/10-ar0x-live"
+    /usr/bin/rm -f -- "${PREFIX}/etc/sudoers.d/90-ar0x-live-nopasswd"
+    shopt -s nullglob
+    local -a files=("${PREFIX}"/etc/sudoers "${PREFIX}"/etc/sudoers.d/*)
+    shopt -u nullglob
+    local f
+    for f in "${files[@]}"; do
+        [[ -r "$f" ]] || continue
+        if grep -Eiq 'NOPASSWD' -- "$f"; then
+            die "RISK-013: passwordless sudo still present in ${f}. Refusing to finish."
+        fi
+    done
+    log 'RISK-013 guard passed: zero NOPASSWD sudoers rules'
+}
+
+# --- Section 3: remove live-only state ---------------------------------------
+remove_live_state() {
+    /usr/bin/rm -f -- "${PREFIX}/etc/sysusers.d/ar0x-live.conf"
+    /usr/bin/rm -f -- "${PREFIX}/etc/sddm.conf.d/90-ar0x-autologin.conf"
+    /usr/bin/rm -f -- "${PREFIX}/etc/systemd/system/getty@tty1.service.d/autologin.conf"
+    /usr/bin/rm -f -- "${PREFIX}/etc/mkinitcpio.conf.d/archiso.conf"
+    log 'removed live autologin / live sysusers / archiso initramfs drop-ins'
+}
+
+write_stamp() {
+    install -dm 0755 -- "$(dirname -- "$STAMP")"
+    printf 'ar0x 0.1.0 installer finished %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$STAMP"
+    chmod 0644 -- "$STAMP"
+    log "wrote ${STAMP}"
+}
+
+main() {
+    if [[ -n "$PREFIX" && ! -d "$PREFIX" ]]; then
+        die "AR0X_TARGET_ROOT does not exist: ${PREFIX}"
+    fi
+    if [[ -f "$STAMP" ]]; then
+        log 'already finished; idempotent no-op'
+        return 0
+    fi
+    arm_first_boot
+    assert_no_passwordless_sudo
+    remove_live_state
+    write_stamp
+    log 'ar0x target is armed for first boot.'
+}
+
+main "$@"

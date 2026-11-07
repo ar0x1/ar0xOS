@@ -1,8 +1,8 @@
 # ar0x — Architecture & Project Plan
 
 > **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
-> Document version: `1.9.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
-> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–9 complete; Phase 10 awaiting confirmation**
+> Document version: `1.10.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–10 complete; Phase 11 awaiting confirmation**
 >
 > All versions in this document were verified against upstream releases on 2026-11-03.
 > Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
@@ -549,10 +549,20 @@ bootloader → unpackfs → initramfs → grubcfg → removeuser → finished`
 - `bootloader` = GRUB, UEFI + BIOS detection, ESP handling, Secure-Boot-aware.
 - `finished` = offers reboot, disables the live autologin, arms `ar0x-welcome` first-boot unit.
 
+**ADR-026 (Phase 10 ✅ COMPLETE)** maps this logical order onto the real
+Calamares 3.4 `show / exec / show` contract in `config/calamares/settings.conf`:
+`package-select` is `packagechooser@ar0x-packages` (view) plus the `packages`
+job (exec); "initramfs" is Arch-native `initcpiocfg` + `initcpio`;
+`bootloader`/`grubcfg` run **after** `unpackfs` because they write into the
+target rootfs; `mount`, `machineid`, `fstab`, `localecfg`, `displaymanager`,
+`networkcfg`, `hwclock`, `services-systemd` and `umount` are required job
+modules. Full step-by-step flow and the ⚠️ RISK-004 disk check:
+[`docs/INSTALLER_FLOW.md`](docs/INSTALLER_FLOW.md).
+
 ### 8.4 First-boot flow
 
 ```
-Calamares `finished` (Phase 10) arms the system unit + regenerates /etc/machine-id
+Calamares shellprocess@ar0x-finish (P10) arms the unit + writes the systemd first-boot sentinel
 systemd → ar0x-firstboot.service (SYSTEM, ConditionFirstBoot=yes, ROOT, oneshot)
    └─> /usr/lib/ar0x/ar0x-firstboot
          ├─ RISK-013 guard: FAIL if any NOPASSWD sudoers rule survived
@@ -572,8 +582,10 @@ graphical-session.target → ar0x-welcome.service (USER, NORMAL USER, no root)
 ⚠️ **Two units are required:** a system unit cannot open a Wayland window, and
 a user unit has no `ConditionFirstBoot`. `ar0x-firstboot.service` is deliberately
 NOT in `50-ar0x.preset` (that preset is the single owner of live-ISO service
-state; the package is not installed on the ISO until Phase 11). Full wiring
-and the exact installed paths: `/home/user/ar0xOS/docs/TOOLS_GUIDE.md §3`.
+state; the package is not installed on the ISO until Phase 11). Phase 10 arms
+it with a **plain symlink** (no D-Bus in a chroot) and writes `uninitialized`
+to `/etc/machine-id` so `ConditionFirstBoot=yes` fires; see ADR-026 and
+`docs/INSTALLER_FLOW.md §4`. Full wiring: `docs/TOOLS_GUIDE.md §3`.
 
 ---
 
@@ -665,6 +677,35 @@ Full procedure: `/home/user/ar0xOS/docs/REPO_GUIDE.md §3`.
 
 ---
 
+## 10b. Installer architecture (Phase 10 ✅ COMPLETE)
+
+| Layer | Canonical source | Installed path |
+|---|---|---|
+| Main config | `config/calamares/settings.conf` | `/etc/calamares/settings.conf` |
+| 21 module configs | `config/calamares/modules/*.conf` | `/etc/calamares/modules/*.conf` |
+| Brand | `config/calamares/branding/ar0x/**` | `/etc/calamares/branding/ar0x/**` (preferred over `/usr/share`) |
+| First-boot helper | `config/installer/ar0x-installer-finish` | `/usr/lib/ar0x/ar0x-installer-finish` (`0755`) |
+| Launcher | `config/installer/ar0x-installer.desktop` | `/usr/share/applications/ar0x-installer.desktop` |
+
+`tools/bootstrap.sh` overlays `config/calamares/**` → `/etc/calamares/**` at
+ISO build time; **ADR-024** forbids a duplicate in `archiso/airootfs/etc/`.
+`tools/configure-installer.sh --sync` regenerates the byte-identical logo
+mirror, installs the helper + launcher into the airootfs, and stages a
+disposable `build/installer-prefix`. `ar0x_installer.py` validates the
+3-phase sequence, 3 instances, 21 configs, 8 palette pins, 3 official-only
+package groups, RISK-003/004/013 and the Codeberg 3.4.3 pin — with **9
+negative mutation tests** and a real `ar0x-installer-finish` run into a
+throwaway target root.
+
+⚠️ **MANUAL GATES (RISK-048/051/052):** `calamares` is NOT in
+`config/packages.x86_64` (it does not exist in official Arch repos and the
+signed `[ar0x]` db does not exist yet), no GUI was launched, no disk was
+partitioned, and no full install → reboot → first-boot cycle ran. Phase 11
+must publish Calamares 3.4.3 from the Codeberg tarball, add it with
+`ar0x-meta`, then run the QEMU flow in `docs/INSTALLER_FLOW.md §2/§6`.
+
+---
+
 ## 11. Release engineering
 
 | Property | Value |
@@ -703,6 +744,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-023 | Plain-GTK4 tools, non-root signed-update wrapper, 5 packages deferred to P9 | real offline-testable CLI tools + zero file-ownership conflicts vs. a full 8-package repo in P8 |
 | ADR-024 | ONE OWNER PER PATH: airootfs overlay owns 92 ISO paths; 5 P9 packages install `/usr/share/ar0x/<pkg>/**` + 3 user-space `ar0x-apply-*` helpers; PR-safe CI with zero secrets | all 8 PKGBUILDs buildable with zero pacman file conflicts vs. duplicate theme data on disk and a second copy step for stock-Arch users |
 | ADR-025 | ar0x-only naming: codename `ar0x root` / `ar0x-root`, boot art `AR0X ROOT`, default wallpaper `ar0x-grid.png`, whole-tree naming gate | one self-referential brand enforced by `validate-versions.sh §7j` vs. 72 files + 3 binary renames and repetitive `(ar0x root)` wording |
+| ADR-026 | Calamares 3.4.3 `show/exec/show` real sequence, `/etc/calamares` branding, offline `packagechooser` groups, `initcpiocfg/initcpio`, plain-symlink first-boot arming | a real installable sequence + zero `pacman -Sy` + no second config copy vs. a 22-job exec phase, a dangling first-boot unit until Phase 11, and no live GUI QA |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -734,6 +776,7 @@ Full register with mitigations and trigger conditions:
 | RISK-049 | MEDIUM | All 8 PKGBUILDs checksum-verified (57/57) but never built with `makepkg` / `namcap` (P8/P9) |
 | RISK-050 | LOW | 5 reserved welcome link endpoints + `repo.ar0x.dev`; `/tree/main/docs` needs the PR merged (P12) |
 | RISK-051 | ⚠️ CRITICAL | Offline private release key + CI signing secrets: leakage or a bad published signature is a security incident. `PENDING-KEYGEN`, empty `ar0x-trusted`, PR workflows with ZERO secrets, protected `release` Environment, fork guard, gitignored key artifacts |
+| RISK-052 | ⚠️ HIGH | Phase 10 installer never rendered/booted: no Qt6/QML/Wayland/QEMU/KVM/root here; config, branding, first-boot wiring and offline self-tests only (P10 → P11) |
 
 ---
 
@@ -751,13 +794,15 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 8 | `AR0X_CONFIRM_BUILD=yes ./tools/configure-tools.sh --build` on a real Arch host | You | ⚠️ `makepkg -s` may install build deps via sudo/pacman; RISK-049; no rollback |
 | 8 | Boot a real ISO, launch `ar0x-welcome`, click every button, verify polkit agent + CSS | You | ⚠️ RISK-047; no GTK4/display in the sandbox |
 | 8 | ⚠️ `ar0x-update --upgrade` replaces kernel/glibc/GPU drivers | You | No automatic rollback; use `--rollback` + `pacman -U` |
-| 8 | Calamares `finished` must arm `ar0x-firstboot.service` + regenerate `/etc/machine-id` | You | `ConditionFirstBoot=yes`; RISK-013 guard; Phase 10 wiring |
 | 8 | `namcap` / `shellcheck` / `desktop-file-validate` / `systemd-analyze verify` | You | All four unavailable in this sandbox |
 | 9 | `sudo AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen` on an AIR-GAPPED host; COMMIT the fingerprint; publish it out of band; run `--sync` | You | Key custody, RISK-051; no gpg/pinentry here |
 | 9 | `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on a real Arch host; then `namcap` + `shellcheck` | You | `makepkg` refuses root; RISK-049 |
 | 9 | `sudo AR0X_CONFIRM_SIGN=yes ./tools/setup-repo.sh --sign` → `--verify` | You | `gpg` + `repo-add -s` unavailable here; RISK-048 |
 | 9 | `./tools/setup-repo.sh --publish` then the printed `rsync` / `gh release create` commands; provision DNS + TLS for `repo.ar0x.dev`; `pacman-key --init` + `--populate ar0x` on a test host | You | `--publish` NEVER uploads; Phase 12 gate |
-| 10 | Walk the installer flow; **verify the target disk before confirming partitioning** | You | ⚠️ RISK-004, destructive |
+| 10 | Verify Phase 10 wiring on a real target: `ar0x-firstboot.service` symlink + `/etc/machine-id` sentinel + zero `NOPASSWD` (`sudo -l`) | You | ⚠️ RISK-013/052; config is delivered, live install is NOT |
+| 10 | ⚠️ Walk the installer flow: `lsblk -o NAME,SIZE,MODEL,TRAN`, TYPE the target device, disposable QEMU disk ONLY | You | ⚠️ RISK-004, destructive, irreversible |
+| 10 | Build/publish Calamares 3.4.3 (Codeberg tarball + detached `.asc`) to the signed `[ar0x]` repo; add `calamares` + `ar0x-meta` to `config/packages.x86_64` | You | RISK-003/048/051; Phase 11 gate |
+| 10 | Launch the GUI on a real Arch live ISO; full install → reboot → `ar0x-welcome` first login; `calamares -d` debug log | You | ⚠️ RISK-052; no Qt6/QML/Wayland/KVM/display/root here |
 | 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox |
 | 11 | Confirm SHA256 + GPG signature of the final ISO | You | Release gate |
 | 12 | Upload to mirrors, submit DistroWatch form, publish announcement | You | External accounts |
@@ -779,7 +824,7 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | **7** | Branding & Identity ✅ | `/etc/{os-release,lsb-release,issue,issue.net,motd}` + `/usr/lib/os-release`, `palette.conf`, 3 ASCII variants (fastfetch/neofetch/screenfetch), 4 SVG masters + 2 logo PNGs + `LOGO` icon, real ar0x XCursor theme (5 shapes × 3 sizes + 12 aliases), final GRUB/Plymouth/syslinux art, `tools/lib/{ar0x_logo.py,ar0x_xcursor.py}`, `tools/gen-branding-assets.sh`, `tools/configure-branding.sh`, `docs/BRANDING_GUIDE.md`, ADR-022, RISK-040 closed | `configure-branding.sh --check` + `validate-versions.sh` pass (0 warnings); SVG/PNG/XCursor/JSONC all parsed back; `fastfetch` shows ar0x identity |
 | **8** | Custom ar0x Tools ✅ | `ar0x-welcome` (GTK4/PyGObject, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 3 PKGBUILDs with real SHA-256 sums, 2 systemd units, RISK-013/008 helpers, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md`, ADR-023, 5 Phase 9 skeletons | `configure-tools.sh --check/--sync/--self-test` + `validate-versions.sh` pass; all three run offline; GTK4 render + `makepkg`/`namcap` are manual |
 | **9** | Package Repository ✅ | **All 8** PKGBUILDs (57/57 sums), ADR-024 one-owner-per-path + 3 `ar0x-apply-*` helpers, `ar0x-keyring` trust bootstrap, `config/repo/**` policy (12 options), 14 `versions.env` keys, `tools/setup-repo.sh`, `tools/lib/ar0x_repo.py`, 3 GitHub Actions workflows (PR-safe / build / release), `docs/REPO_GUIDE.md`, ADR-024, RISK-051 | `setup-repo.sh --check/--sync/--self-test`, `ar0x_repo.py` (+ `--self-test`), `ar0x_pkgbuild.py`, `validate-versions.sh`, `bash -n`, Python AST, `git diff --check` pass. ⚠️ keygen/signing/publication/`makepkg` are MANUAL; no signed repo exists |
-| 10 | Installer | Calamares 3.4.3 branding modules, `settings.conf`, all module configs, step-by-step test flow | Full install → reboot → first boot succeeds |
+| **10** | Installer ✅ | Calamares 3.4.3 `settings.conf` (show/exec/show, 3 instances, 22 exec jobs), **21** module configs, ar0x `branding.desc` + `show.qml` + logo mirror, `ar0x-installer-finish` first-boot arming, `pkexec` launcher, `tools/configure-installer.sh`, `tools/lib/ar0x_installer.py`, `docs/INSTALLER_FLOW.md`, ADR-026, RISK-052 | `configure-installer.sh --check/--sync/--self-test` + `ar0x_installer.py` (9 negative tests + REAL helper run), `validate-versions.sh §7k`, `git diff --check` PASS. ⚠️ Full install → reboot → `ar0x-welcome` is a **MANUAL Phase 11 QEMU gate**; GUI never launched here (RISK-052) |
 | 11 | ISO Build & Testing | `tools/build-iso.sh`, `tools/checksum.sh`, QEMU UEFI/BIOS cmds, VBox/VMware steps, `docs/TESTING_CHECKLIST.md` | Checklist 100% pass; ISO < 2.2 GB |
 | 12 | Release & Distribution | `README.md`, announcement template, upload guide, DistroWatch draft, roadmap template | Tag `v0.1.0` published with signatures |
 
@@ -791,7 +836,13 @@ Steps that **cannot** be automated, flagged here per the output rules:
    (`-bios OVMF`) and QEMU BIOS (SeaBIOS).
 2. ISO size ≤ 2.2 GB; `SHA256SUMS` and detached GPG signature verify.
 3. Calamares completes an unattended-default install on a clean virtual disk; the rebooted
-   system reaches `ar0x-welcome` on first login.
+   system reaches `ar0x-welcome` on first login. ⚠️ **P10 CONFIG COMPLETE, RUNTIME
+   OPEN:** the full sequence, branding, package groups, first-boot arming and
+   step-by-step test flow are delivered and structurally validated
+   (`docs/INSTALLER_FLOW.md`), but `calamares` is not yet in the ISO (signed
+   `[ar0x]` repo is `PENDING-KEYGEN`) and no Qt6/Wayland/QEMU install ran here.
+   Remaining gates: MANUAL keygen → publish → `config/packages.x86_64` → QEMU
+   install → reboot → first login (RISK-048/051/052).
 4. WiFi, Bluetooth, audio (PipeWire), GPU acceleration, and screen capture all pass the
    Phase 11 checklist on at least one real hardware machine.
 5. `fastfetch`, `/etc/os-release`, GRUB, Plymouth, SDDM, and the desktop all show ar0x branding.

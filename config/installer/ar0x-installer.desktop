@@ -1,0 +1,13 @@
+# /usr/share/applications/ar0x-installer.desktop — Phase 10
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install ar0x
+GenericName=System Installer
+Comment=Install ar0x 0.1.0 (ar0x root) to this computer
+Exec=/usr/bin/pkexec /usr/bin/calamares
+Icon=ar0x-logo
+Terminal=false
+Categories=System;Settings;
+Keywords=install;installer;calamares;
+StartupNotify=true

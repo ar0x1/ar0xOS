@@ -51,12 +51,18 @@ jobs:
           ./tools/configure-branding.sh --check
           ./tools/configure-tools.sh --check
           ./tools/setup-repo.sh --check
+          ./tools/configure-installer.sh --check
 
       - name: Phase 9 offline self-test (mock signed repo)
         run: |
           set -euo pipefail
           python3 tools/lib/ar0x_repo.py "$PWD" --self-test
           python3 tools/lib/ar0x_pkgbuild.py "$PWD"
+
+      - name: Phase 10 offline self-test (Calamares config, no Qt/root)
+        run: |
+          set -euo pipefail
+          python3 tools/lib/ar0x_installer.py "$PWD" --self-test
 
       - name: No private-key material in the tree
         run: |

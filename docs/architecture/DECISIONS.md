@@ -744,6 +744,76 @@ external references to the former wallpaper filename must be updated
 (all in-tree ones were). **Reversal cost:** LOW (one naming constant + a sync pass), but the
 validator gate must be updated deliberately.
 
+## ADR-026 — Real Calamares 3.4 `show/exec/show` installer sequence (Phase 10)
+
+**Status:** ACCEPTED · 2026-11-07 · supersedes the *literal* module ordering in
+`PROJECT_PLAN.md §8.3` (the logical flow is preserved; only the Calamares
+implementation shape changes).
+
+**Context.** `PROJECT_PLAN.md §8.3` describes a flat, human-readable order:
+`welcome → locale → keyboard → partition → users → package-select → bootloader
+→ unpackfs → initramfs → grubcfg → removeuser → finished`. Calamares 3.4.3 does
+not accept a flat list: `sequence` is a list of phases, **view modules** may only
+appear in `show:` phases and **job modules** only in `exec:` phases; an `exec`
+phase enqueues jobs from the pages shown immediately before it. Several required
+job modules (`mount`, `machineid`, `fstab`, `localecfg`, `displaymanager`,
+`networkcfg`, `hwclock`, `services-systemd`, `umount`) have no GUI page at all.
+Finally, `bootloader` writes into the target rootfs and therefore **must** run
+after `unpackfs`.
+
+**Decision.** `config/calamares/settings.conf` ships three phases:
+
+```yaml
+sequence:
+- show: [welcome, locale, keyboard, partition, users,
+         packagechooser@ar0x-packages, summary]
+- exec: [partition, mount, unpackfs, packages, machineid, fstab, locale,
+         keyboard, localecfg, shellprocess@ar0x-prep, initcpiocfg, initcpio,
+         removeuser, users, displaymanager, networkcfg, hwclock,
+         services-systemd, grubcfg, bootloader, shellprocess@ar0x-finish,
+         umount]
+- show: [finished]
+```
+
+- `package-select` = instance `packagechooser@ar0x-packages` (view) + the
+  `packages` job module (exec). `method: packages`, `mode: required`, exactly
+  three groups `minimal / standard / full` of **official-only** packages.
+- "initramfs" = Arch-native `initcpiocfg` + `initcpio` (`mkinitcpio`), NOT the
+  Debian `initramfs`/`initramfscfg` modules.
+- `shellprocess@ar0x-prep` deletes the archiso live-initramfs drop-in and the
+  build-stamp pacman hook before `initcpio`; `shellprocess@ar0x-finish` writes
+  the `uninitialized` `/etc/machine-id` sentinel, arms
+  `ar0x-firstboot.service` with a **plain symlink** (no D-Bus in a chroot),
+  and aborts the install if any `NOPASSWD` sudoers rule survives (RISK-013).
+- Branding lives in `/etc/calamares/branding/ar0x/` — Calamares prefers `/etc`
+  over `/usr/share`, so `config/calamares/**` remains the **single owner** of
+  all installer configuration (ADR-024). No duplicate in `archiso/airootfs`.
+- `initialPartitioningChoice: none` + `prompt-install: true` + a mandatory
+  human `lsblk -o NAME,SIZE,MODEL,TRAN` check (RISK-004).
+- `packages.conf` sets `update_db: false` / `update_system: false` /
+  `skip_if_no_internet: true`: the ISO install is OFFLINE and a bare
+  `pacman -Sy` would violate the §9 security contract.
+- `secureBoot: false` (RISK-007 MOK enrollment stays manual).
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Real 3-phase sequence ✅** | Calamares 3.4.3 actually runs; every required job present; order validated by `ar0x_installer.py` | 22 exec jobs; plan's literal order is no longer verbatim |
+| Flat list from §8.3 | matches the plan text | Calamares rejects it; no install |
+| `/usr/share/calamares/branding/ar0x/` | familiar path | second synced copy → ADR-024 one-owner violation |
+| `systemctl --root=... enable` in `finished` | idempotent | needs D-Bus/systemd in a chroot; plain symlink is safer |
+| `netinstall` for package groups | richer selection | requires network; v0.1 installs offline |
+
+**Enforcement.** `tools/lib/ar0x_installer.py` (pure stdlib; 9 negative mutation
+tests + a real `ar0x-installer-finish` run), `tools/validate-versions.sh §7k`,
+and `tools/configure-installer.sh --check/--sync/--self-test`. `RISK-003`
+asserts the Codeberg 3.4.3 pin and rejects the archived GitHub mirror.
+`RISK-052` records that no GUI, QEMU install, reboot or first login happened.
+
+**Tradeoffs accepted:** a dangling `ar0x-firstboot.service` symlink until Phase
+11 publishes `ar0x-meta` to the signed `[ar0x]` repo; no live GUI QA;
+`calamares` remains absent from `config/packages.x86_64`. **Reversal cost:**
+LOW (one `settings.conf` + validator pass).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -773,3 +843,4 @@ validator gate must be updated deliberately.
 | 023 Plain-GTK4 tools + non-root signed update + 5 packages deferred | three offline-testable tools, zero file-ownership conflicts, real SHA-256 PKGBUILDs | no `ar0x-meta` until P9, GTK4 window never rendered here (RISK-047) |
 | 024 ONE OWNER PER PATH + PR-safe signed repo | all 8 PKGBUILDs, zero pacman conflicts, private key never on a PR workflow | duplicate reference data on disk; generation/signing/publication remain MANUAL |
 | 025 ar0x-only naming (`ar0x root` / `ar0x-root`) | one self-referential brand, enforced by a whole-tree build gate | 72 files + 3 binary renames, repetitive `ar0x 0.1.0 (ar0x root)` wording |
+| 026 Real Calamares `show/exec/show` + offline groups + symlink first boot | an actually runnable 3.4.3 installer, zero `pacman -Sy`, ADR-024 one owner | 22 exec jobs, first-boot unit dangling until P11, no live GUI QA (RISK-052) |

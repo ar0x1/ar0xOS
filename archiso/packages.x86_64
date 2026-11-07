@@ -25,7 +25,10 @@
 #             [ar0x] repo built in Phase 9 (RISK-048). Adding them now would
 #             break `bootstrap.sh --check` on the frozen snapshot mirror.
 #   Phase 8 : ar0x-welcome ar0x-update ar0x-info ar0x-theme ar0x-meta ...
-#   Phase 10: calamares 3.4.3 (from the [ar0x] repo, ADR-017)
+#   Phase 10: calamares 3.4.3 CONFIG is COMPLETE (config/calamares/**, ADR-026),
+#             but the binary is STILL not listed here: it is not in official
+#             Arch repos and the signed [ar0x] db does not exist yet. Phase 11
+#             adds `calamares` + `ar0x-meta` AFTER MANUAL keygen/sign/publish.
 # Phase 11 rebuilds the ISO from the accumulated list. Phase 3's own build is
 # a BASE BOOTSTRAP SMOKE TEST, not the final release ISO.
 # -----------------------------------------------------------------------------

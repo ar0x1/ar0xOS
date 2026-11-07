@@ -68,6 +68,8 @@ REQUIRED_KEYS=(
     AR0X_REPO_KEY_EXPIRE AR0X_REPO_KEY_FINGERPRINT_FILE AR0X_REPO_PUBLIC_KEY
     AR0X_REPO_KEEP_OLD AR0X_REPO_CI_IMAGE AR0X_REPO_CI_BUILDER
     AR0X_REPO_SIGN_PACKAGES
+    AR0X_INSTALLER_BRANDING AR0X_INSTALLER_LIVE_USER AR0X_CALAMARES_ESP_MIB
+    AR0X_CALAMARES_MODULE_SEARCH AR0X_INSTALLER_PACKAGE_GROUPS
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -674,6 +676,73 @@ if hits:
 print('[ OK ] ar0x-only naming: zero legacy brand tokens in text or filenames')
 PYTOKEN
 ok "Brand naming gate: codename ar0x root / ar0x-root, zero legacy tokens"
+
+# --- Section 7k: Phase 10 Calamares installer policy gates ------------------
+PHASE10_FILES=(
+    config/calamares/settings.conf
+    config/calamares/modules/welcome.conf config/calamares/modules/locale.conf
+    config/calamares/modules/keyboard.conf config/calamares/modules/partition.conf
+    config/calamares/modules/users.conf config/calamares/modules/ar0x-packages.conf
+    config/calamares/modules/packages.conf config/calamares/modules/unpackfs.conf
+    config/calamares/modules/initcpiocfg.conf config/calamares/modules/initcpio.conf
+    config/calamares/modules/bootloader.conf config/calamares/modules/grubcfg.conf
+    config/calamares/modules/removeuser.conf config/calamares/modules/displaymanager.conf
+    config/calamares/modules/services-systemd.conf config/calamares/modules/machineid.conf
+    config/calamares/modules/finished.conf config/calamares/modules/summary.conf
+    config/calamares/modules/shellprocess-prep.conf
+    config/calamares/modules/shellprocess-finish.conf
+    config/calamares/modules/umount.conf
+    config/calamares/branding/ar0x/branding.desc
+    config/calamares/branding/ar0x/show.qml
+    config/calamares/branding/ar0x/ar0x-logo.png
+    config/installer/ar0x-installer-finish
+    config/installer/ar0x-installer.desktop
+    archiso/airootfs/usr/lib/ar0x/ar0x-installer-finish
+    archiso/airootfs/usr/share/applications/ar0x-installer.desktop
+    tools/lib/ar0x_installer.py tools/configure-installer.sh
+    docs/INSTALLER_FLOW.md
+)
+for f in "${PHASE10_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 10 deliverable: ${f}"
+done
+ok "Phase 10 deliverable files present (${#PHASE10_FILES[@]} files)"
+
+[[ "${AR0X_INSTALLER_BRANDING}" == "ar0x" ]] \
+    || fail "Phase 10: AR0X_INSTALLER_BRANDING must be 'ar0x'."
+[[ "${AR0X_INSTALLER_LIVE_USER}" == "ar0x" ]] \
+    || fail "RISK-013: AR0X_INSTALLER_LIVE_USER must match /etc/passwd live user."
+[[ "${AR0X_CALAMARES_ESP_MIB}" == "512" ]] \
+    || fail "Phase 10: ESP must be 512 MiB."
+[[ "${AR0X_INSTALLER_PACKAGE_GROUPS}" == "minimal,standard,full" ]] \
+    || fail "Phase 10: package groups must be minimal,standard,full."
+[[ -x "${AR0X_SOURCE_ROOT}/tools/configure-installer.sh" ]] \
+    || fail "Phase 10: tools/configure-installer.sh must be 0755."
+[[ -x "${AR0X_SOURCE_ROOT}/config/installer/ar0x-installer-finish" ]] \
+    || fail "Phase 10: ar0x-installer-finish must be 0755."
+[[ ! -d "${AR0X_SOURCE_ROOT}/archiso/airootfs/etc/calamares" ]] \
+    || fail "ADR-024: duplicate /etc/calamares in airootfs; config/calamares is the ONE owner."
+# RISK-004: never auto-select a disk, always prompt before the exec phase.
+grep -Fq 'initialPartitioningChoice: none' \
+        "${AR0X_SOURCE_ROOT}/config/calamares/modules/partition.conf" \
+    || fail "RISK-004: partition.conf lost 'initialPartitioningChoice: none'."
+grep -Fq 'prompt-install: true' \
+        "${AR0X_SOURCE_ROOT}/config/calamares/settings.conf" \
+    || fail "RISK-004: settings.conf lost 'prompt-install: true'."
+grep -Fq 'lsblk -o NAME,SIZE,MODEL,TRAN' \
+        "${AR0X_SOURCE_ROOT}/docs/INSTALLER_FLOW.md" \
+    || fail "RISK-004: INSTALLER_FLOW.md lost the mandatory lsblk check."
+# RISK-003: the archived GitHub mirror must never appear in the config tree.
+if grep -rIl 'github.com/calamares/calamares' \
+        "${AR0X_SOURCE_ROOT}/config/calamares" "${AR0X_SOURCE_ROOT}/config/installer"; then
+    fail "RISK-003: archived GitHub Calamares mirror referenced in Phase 10 config."
+fi
+ok "Phase 10 policy gates: RISK-003/004/013, ADR-024, 0755 modes, 5 version keys"
+
+# Delegate the FULL Phase 10 structural check (show/exec/show sequence, 3
+# instances, 21 module configs, 8 palette pins, 3 official-only groups) to the
+# shared module so both validators agree on ONE definition.
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_installer.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Phase 10 structural validation failed (tools/lib/ar0x_installer.py)."
 
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then

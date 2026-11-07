@@ -341,6 +341,12 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | A stale `sha256sums` array after editing a tool | `makepkg` aborts with a checksum failure | `configure-tools.sh --sync` regenerates all 18 real SHA-256 sums; `--check` verifies each |
 | Module-level `import gi` in `ar0x-welcome.py` | `--self-test` fails on headless CI with no GTK4 (RISK-047) | `ar0x_pkgbuild.validate_sources()` asserts `gi` is lazy; `run_gui()` imports it |
 | Calamares built before Qt/KPMcore present | Link/compile failure | `R4 → I1` plus Phase 2 host package check |
+| A flat Calamares module list (no `show`/`exec` phases) | 3.4.3 cannot enqueue view/job modules; install never starts | `settings.conf` 3 phases asserted by `ar0x_installer.py::check_settings()` (ADR-026) |
+| `bootloader` before `unpackfs` | GRUB writes into a rootfs that does not exist yet | `EXEC_ORDER` asserts `unpackfs → … → grubcfg → bootloader` |
+| `pacman -Sy` inside the offline installer | partial DB sync / partial upgrade, §9 contract violated | `packages.conf` `update_db/system: false`; `ar0x_installer.py` fails on `-Syu`/`--noconfirm`/`pacman -Sy` |
+| A second `/etc/calamares` copy in `archiso/airootfs` | two owners; the overlay silently overwrites the live config | ADR-024; `configure-installer.sh --check` asserts the directory is ABSENT |
+| `NOPASSWD` sudoers surviving the install | empty-password live account leaks into the target (RISK-013/033) | `removeuser` before `users`; `ar0x-installer-finish` ABORTS the install on any `NOPASSWD` rule (negative-tested) |
+| `ar0x-firstboot.service` armed with `systemctl` in a chroot | D-Bus unavailable; unit never enabled | ADR-026 plain symlink + `uninitialized` `/etc/machine-id` sentinel |
 
 ---
 
@@ -349,7 +355,7 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 ```
 GATE-1 (you confirm P1) ──> P2 ──> GATE-2 ──> P3 ──> GATE-3 ──> P4 ──> GATE-4
    ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ✅ ──> GATE-8
-   ──> P9 ✅ ──> GATE-9 ──> P10 ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
+   ──> P9 ✅ ──> GATE-9 ──> P10 ✅ ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
 ```
 
 Every gate is an explicit user confirmation. No gate is auto-advanced.

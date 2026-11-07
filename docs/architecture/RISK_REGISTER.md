@@ -66,6 +66,7 @@
 | **RISK-048** | ⚠️ **HIGH** | **STILL OPEN after Phase 9**: the signed `[ar0x]` database was NOT built/published, so all 8 packages remain SOURCE + PKGBUILD only and `ar0x-meta` is not installable. `config/packages.x86_64` carries ZERO `ar0x-*` packages | Phase 9 shipped the complete tooling: `setup-repo.sh`, `ar0x_repo.py`, 3 CI workflows, `config/repo/**`, all 8 PKGBUILDs (57/57 sums), ADR-024. **MANUAL gates**: air-gapped `--keygen` → `--sync` → `--build` → `--sign` → `--verify` → Phase 12 `--publish`/DNS/TLS. `ar0x_pkgbuild.validate_iso_package_policy()` still FAILS if any `ar0x-*` appears in the ISO list before Phase 11; acceptance criterion 7 remains explicitly blocked | P8/P9 → P11/P12 |
 | **RISK-049** | **MEDIUM** | `makepkg`, `gpg`, `repo-add`, `pacman`, `namcap`, `desktop-file-validate`, `systemd-analyze verify` and `shellcheck` are unavailable here — **all 8** PKGBUILDs were NEVER built, only structurally validated | 8/8 PKGBUILDs pass `bash -n`; `ar0x_pkgbuild.py` verifies 57/57 sums (56 real + 1 MANUAL `SKIP`), `ADR-024: 0/8 overlay paths`, 3 `.desktop` files + 2 units; `setup-repo.sh --sync` refreshes all sums; `ar0x_repo.py --self-test` exercises a mock signed repo + 3 negative cases. **MANUAL gate**: `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on `archlinux:base-devel`, then `namcap` + `shellcheck` | P8/P9 |
 | **RISK-050** | **LOW** | The five `AR0X_URL_*` link endpoints AND `https://repo.ar0x.dev/$arch` are RESERVED; `/tree/main/docs` resolves only AFTER the PR is merged | `links.conf` keeps URL pins in ONE place with `AR0X_URL_*` parity asserted by `--check`; `repo-options.conf` / `pacman.conf.ar0x-entry` / `pacman.conf.installed` all use the same https `$arch` placeholder, asserted by `ar0x_repo.validate_repo_options()`. **MANUAL Phase 12 gate**: `curl -IL` every endpoint, provision DNS + TLS, replace any dead one before tagging v0.1.0 | P8/P9/P12 |
+| **RISK-052** | ⚠️ **HIGH** | Phase 10 Calamares GUI was **NEVER launched**: no Qt6/QML/KPMcore runtime, no Wayland session, no QEMU/KVM, no root, no real target disk in this sandbox; configuration, branding, first-boot wiring and offline self-tests only | Anyone claims "full install → reboot → first boot succeeds" based on structural validation alone | `docs/INSTALLER_FLOW.md §2/§6/§7` marks the whole flow MANUAL; `config/calamares` is validated by `ar0x_installer.py` (9 negative tests + a REAL `ar0x-installer-finish` run into a temp root, NOT an install); `configure-installer.sh --preflight` is print-only and NEVER launches calamares; `calamares` is deliberately absent from `config/packages.x86_64` until the signed `[ar0x]` repo exists. **MANUAL Phase 11 gate**: QEMU UEFI+BIOS install → reboot → `ar0x-welcome` first login | You, P10/P11 |
 | **RISK-051** | ⚠️ **CRITICAL** | Offline private GPG release key + CI signing secrets: leakage, an unprotected key, or a bad signature published to users is a **security incident** requiring key rotation, revocation and re-signing every package | `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`; `ar0x-trusted` is EMPTY so `SigLevel = Required` correctly refuses an unsigned repo; `ar0x-public-key.asc` is a MANUAL gitignored keygen artifact with `SKIP` checksum; `--keygen` uses `gpg --quick-generate-key` WITHOUT `--batch`/`--passphrase` so gpg-agent demands a real passphrase, `GNUPGHOME` is `0700` under `/opt/ar0x-build/keys`; `validate-packages.yml` + `build-packages.yml` run on forked PRs with **ZERO secrets**; `release.yml` has NO `pull_request` trigger + an explicit fork guard + a protected `release` Environment; `ar0x_repo.validate_workflows()` and `validate_no_secrets()` assert all of this; `ar0x-revoked` is the revocation path. **MANUAL**: air-gapped keygen, fingerprint publication, key rotation | You, P9/P12 |
 
 ---
@@ -84,7 +85,7 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 7 | ⚠️ **RISK-044** (no live art render), RISK-045 (live SVG text), RISK-046 (raster joins), **RISK-040 CLOSED**; `configure-branding.sh --apply` is ROOT-only, rebuilds initramfs + `grub.cfg`, and has NO automatic rollback |
 | 8 | ⚠️ **RISK-047** (GTK4 never rendered), **RISK-048** (no signed repo yet), RISK-049 (no `makepkg`/`namcap`), **RISK-013** (NOPASSWD guard), RISK-008 (AppArmor opt-in), RISK-020, RISK-042, RISK-050; `configure-tools.sh --build` is MANUAL and RISKY |
 | 9 | ⚠️ **RISK-051** (CRITICAL: private release key NEVER on a PR workflow), **RISK-048** (no signed repo after P9 tooling), RISK-049 (no `makepkg`/`gpg`/`repo-add`), RISK-003 (Codeberg), RISK-011 (key custody), RISK-050 (reserved `repo.ar0x.dev`) |
-| 10 | ⚠️ **RISK-004** (destructive partitioning), RISK-013 |
+| 10 | ⚠️ **RISK-004** (CRITICAL: destructive partitioning — `lsblk` + TYPED device + disposable VM disk), **RISK-052** (GUI NEVER launched), **RISK-003** (Codeberg 3.4.3 only), **RISK-048/051** (no signed repo → `calamares` not on ISO), RISK-013 (NOPASSWD guard), RISK-033 (empty-password live user), RISK-010 (official-only groups) |
 | 11 | ⚠️ **RISK-004**, RISK-005, RISK-007, RISK-009, RISK-012, RISK-015 |
 | 12 | RISK-015 |
 
@@ -126,6 +127,18 @@ These exact warnings will be repeated at the start of the corresponding phase re
     or `gpg --detach-sign` for EVERY tarball first (`repo-add --include-sigs` embeds them).
 18. **Never** run `makepkg` as root, or use `makepkg -s` without `--nodeps` for these 8
     packages — their intra-repo depends do not exist until the build job finishes.
+19. **Never** auto-select a Calamares target disk. `partition.conf` keeps
+    `initialPartitioningChoice: none`, `settings.conf` keeps
+    `prompt-install: true`, and `INSTALLER_FLOW.md` requires a human
+    `lsblk -o NAME,SIZE,MODEL,TRAN` read + TYPED device (RISK-004).
+20. **Never** enable `ar0x-firstboot.service` in `50-ar0x.preset` (the live-ISO
+    preset owns live service state only) or use `systemctl`/D-Bus inside the
+    Calamares chroot; Phase 10 uses a plain symlink (ADR-026, RISK-013).
+21. **Never** put `args:`/`arguments:` in a `shellprocess.conf`, omit
+    `emergency: true` from `umount.conf`, or set `sourcefs` to anything but
+    `squashfs` in `unpackfs.conf` — all three are known Calamares 3.4 traps.
+22. **Never** run `pacman -Sy`/`-Syu` during an OFFLINE ISO install; `packages.conf`
+    sets `update_db: false` and `update_system: false` (§9 contract).
 
 ---
 
@@ -140,6 +153,9 @@ v0.1 is a **developer preview**. The residual risks accepted at release are:
 - AppArmor policies are minimal; most processes remain unconfined.
 - The GTK4 welcome window has had NO live render QA (RISK-047); only headless
   structural + self-test coverage exists.
+- The Calamares GUI has had NO live render/install QA (RISK-052): no Qt6, QML,
+  Wayland, QEMU/KVM, root or disposable target disk here. `docs/INSTALLER_FLOW.md`
+  is a validated CONFIGURATION plus a MANUAL test procedure, NOT a test result.
 - `ar0x-meta` is STILL not installable: Phase 9 delivered all 8 PKGBUILDs and the
   signing/CI tooling, but the offline key is `PENDING-KEYGEN` and no signed
   `[ar0x]` repository has been built or published (RISK-048/051).

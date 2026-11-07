@@ -132,11 +132,14 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │   ├── links.conf                         # 5 URL pins (AR0X_URL_* parity)
 │   │   ├── extra-groups.conf                  # 4 official-package groups
 │   │   └── update.conf                        # → /etc/ar0x/update.conf (backup=())
-│   ├── calamares/                              # Phase 10
+│   ├── calamares/                              # Phase 10 ✅ COMPLETE
 │   │   ├── settings.conf                       # → /etc/calamares/settings.conf
-│   │   ├── branding/ar0x/branding.desc         # → /usr/share/calamares/branding/ar0x/
-│   │   └── modules/{welcome,locale,keyboard,partition,users,ar0x-packages,
-│   │               bootloader,unpackfs,initramfs,grubcfg,removeuser,finished}.conf
+│   │   ├── branding/ar0x/{branding.desc,show.qml,ar0x-logo.png}
+│   │   │                                       # → /etc/calamares/branding/ar0x/
+│   │   └── modules/*.conf                      # 21 configs (3 are instances)
+│   ├── installer/                             # Phase 10 — NON-etc assets
+│   │   ├── ar0x-installer-finish               # → /usr/lib/ar0x/ (0755)
+│   │   └── ar0x-installer.desktop             # → /usr/share/applications/
 │   └── repo/
 │       ├── pacman.conf.ar0x-entry               # Phase 9 — snippet appended to installed conf
 │       └── repo-options.conf                    # Phase 9 — repo-add options
@@ -155,7 +158,7 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │   │   └── ... (config/system/** overlays here in Phase 5)
 │   │   ├── usr/
 │   │   │   ├── local/bin/                      # ar0x-* tools (shipped as pkgs in P8)
-│   │   │   └── share/{plymouth,calamares,sddm,backgrounds,applications}/
+│   │   │   └── share/{plymouth,sddm,backgrounds,applications}/  # NO etc/calamares (ADR-024)
 │   │   ├── opt/ar0x/ , root/ , var/lib/ar0x/
 │   │   └── NO root/customize_airootfs.sh       # ⚠️ deprecated in archiso 92
 │   ├── efiboot/loader/entries/                 # unused: uefi.grub, not systemd-boot
@@ -316,7 +319,9 @@ logic other than the three explicit renames below:
 | `tools/gen-branding-assets.sh` output | `/usr/share/icons/ar0x-cursors/cursors/*` — 5 generated Xcursor binaries + 12 alias symlinks written DIRECTLY into the tracked `archiso/airootfs` profile (there is no second binary copy under `assets/`) |
 | `config/desktop/hypr/hyprland.lua` | `/etc/skel/.config/hypr/hyprland.lua` ⚠️ Lua |
 | `config/calamares/settings.conf` | `/etc/calamares/settings.conf` |
-| `config/calamares/branding/ar0x/**` | `/usr/share/calamares/branding/ar0x/**` |
+| `config/calamares/branding/ar0x/**` | `/etc/calamares/branding/ar0x/**` (Calamares prefers `/etc`; a disposable `/usr/share` copy is staged in `build/installer-prefix` for tests only) |
+| `config/installer/ar0x-installer-finish` | `/usr/lib/ar0x/ar0x-installer-finish` (`0755`) |
+| `config/installer/ar0x-installer.desktop` | `/usr/share/applications/ar0x-installer.desktop` (`0644`) |
 | `assets/plymouth/ar0x/**` | `/usr/share/plymouth/themes/ar0x/**` |
 | `assets/grub-theme/ar0x/**` | `/boot/grub/themes/ar0x/**` |
 | `assets/sddm/ar0x/**` | `/usr/share/sddm/themes/ar0x/**` |

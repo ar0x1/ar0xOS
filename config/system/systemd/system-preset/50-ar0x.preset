@@ -16,9 +16,10 @@ enable sddm.service
 # This preset is the single owner of LIVE-ISO system service state; the three
 # ar0x tool packages are NOT installed on the ISO until Phase 9/10, so adding it
 # would make `systemctl preset-all` emit "unit file not found".
-# Calamares `finished` (Phase 10) arms the unit on the TARGET:
-#   systemctl --root=/mnt enable ar0x-firstboot.service
-# and regenerates /etc/machine-id so ConditionFirstBoot=yes fires.
+# Calamares shellprocess@ar0x-finish (Phase 10) arms the unit on the TARGET
+# with a PLAIN SYMLINK (no D-Bus in a chroot) and writes the `uninitialized`
+# /etc/machine-id sentinel so ConditionFirstBoot=yes fires. See ADR-026 and
+# docs/INSTALLER_FLOW.md §4.
 # The USER unit ar0x-welcome.service is enabled by ar0x-welcome.install via a
 # plain symlink (no D-Bus in a chroot). See docs/TOOLS_GUIDE.md §3.
 
