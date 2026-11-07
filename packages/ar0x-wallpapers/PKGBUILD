@@ -18,7 +18,7 @@ license=('CC-BY-SA-4.0')
 depends=('bash' 'coreutils')
 optdepends=('hyprpaper: apply the wallpapers on Wayland')
 source=(
-    'ar0x-neon-grid.png'
+    'ar0x-grid.png'
     'ar0x-void.png'
     'ar0x-circuit.png'
     'ar0x-logo.svg'
@@ -35,15 +35,15 @@ sha256sums=(
     '0a4351d7a5b6f4a653b802280ef2e6323b5ce4055c59cb7c66320e30522f3b58'
     'ca048bb9a9b95c6f15556799bf9d402db1ec2c7a53c29e51389750513fa109c6'
     '599b3f20a65d82486b00660a479d1d69caa19c0ff11efb314b1c9e77099c8daf'
-    '556e5075f562a44d3b0c6d3774464f8acf847b2969473f7a8c0ffd49a7d6e5d9'
+    '5884446b0149b1c9c404ff251ab16cfc96e06b737ea80918e9e223ffc1b49bb7'
     '83afe167a3764f40be4ec28692a88f501012b1916da2110e7f5f92d19e2dc389'
-    'c4783e7b52025142c10aa573ccc83fe7b7181e92785caa533096ab63d7e67e9d'
-    '027f82aebaf8d346b0b468a2012bdf36cb957085bede89d47d1f69f8db954603'
-    '9b960e458d57e5a9fbd420149e8008ad0089d6eef8607295ad8a415d658c38f5'
+    '59494a1ec4cc15baaa14659c60dc6f7b8bfef4a40445a3efd36892c9ece0431c'
+    '9301eab99fa649e3efd9c0ae342b727f06f6cfdce66c1317db60bc48f2a7b5f4'
+    'cdf014eb44cbeac48d6195bef66fee23fc968cbda2832e9e8dc5e3366e14fa91'
 )
 
 package() {
-    install -Dm644 "$srcdir/ar0x-neon-grid.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-neon-grid.png"
+    install -Dm644 "$srcdir/ar0x-grid.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-grid.png"
     install -Dm644 "$srcdir/ar0x-void.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-void.png"
     install -Dm644 "$srcdir/ar0x-circuit.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-circuit.png"
     install -Dm644 "$srcdir/ar0x-logo.svg" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-logo.svg"

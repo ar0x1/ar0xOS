@@ -107,7 +107,7 @@ THEME_FILES=(
     assets/sddm/ar0x/theme.conf
     assets/sddm/ar0x/Main.qml
     assets/sddm/ar0x/background.png
-    assets/wallpapers/ar0x-neon-grid.png
+    assets/wallpapers/ar0x-grid.png
     assets/wallpapers/ar0x-void.png
     assets/wallpapers/ar0x-circuit.png
     assets/wallpapers/PLACEHOLDERS.md
@@ -356,11 +356,11 @@ PY
 
     # Wallpaper references must resolve to real PNGs.
     local wp
-    for wp in ar0x-neon-grid.png ar0x-circuit.png; do
+    for wp in ar0x-grid.png ar0x-circuit.png; do
         [[ -f "${AR0X_ASSETS_DIR}/wallpapers/${wp}" ]] \
             || fail "Missing wallpaper asset: assets/wallpapers/${wp}"
     done
-    grep -Fq '/usr/share/backgrounds/ar0x/ar0x-neon-grid.png' "${HYPR}/hyprpaper.conf" \
+    grep -Fq '/usr/share/backgrounds/ar0x/ar0x-grid.png' "${HYPR}/hyprpaper.conf" \
         || fail "hyprpaper.conf does not reference the ar0x wallpaper."
     grep -Fq '/usr/share/backgrounds/ar0x/ar0x-circuit.png' "${HYPR}/hyprlock.conf" \
         || fail "hyprlock.conf does not reference the ar0x lock wallpaper."
@@ -405,7 +405,7 @@ PY
 import os, struct, sys
 root = sys.argv[1]
 expected = {
-    'assets/wallpapers/ar0x-neon-grid.png': (3840, 2160),
+    'assets/wallpapers/ar0x-grid.png': (3840, 2160),
     'assets/wallpapers/ar0x-void.png':      (3840, 2160),
     'assets/wallpapers/ar0x-circuit.png':   (3840, 2160),
     'assets/sddm/ar0x/background.png':      (1920, 1080),

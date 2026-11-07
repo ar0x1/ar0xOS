@@ -22,7 +22,7 @@ source=(
     'RELEASE'
 )
 sha256sums=(
-    '95427de919cc798c9c87905f8c4ddfbf6cfc07ebd9437b6dbd6af4bced918a92'
+    '8e7024447d4a4e1f1d1e752bb6a3fdc7a8e27803e6ee1f1c801cd1a5649b5dae'
 )
 
 package() {

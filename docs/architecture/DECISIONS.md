@@ -251,7 +251,7 @@ binaries) derives its colours from that chain. `tools/configure-branding.sh --ch
 | `AR0X_MUTED` | `#6B7891` | Dimmed |
 | `AR0X_ALERT` | `#FF5C57` | Errors |
 
-**Tradeoff:** a dark, high-contrast neon palette is striking but can reduce readability in bright
+**Tradeoff:** a dark, high-contrast palette is striking but can reduce readability in bright
 environments and is not accessibility-neutral. Contrast ratio `AR0X_CYAN` on `AR0X_VOID` is
 ≈ 12.8:1 (passes WCAG AA). ⚠️ **Phase 7 correction:** the earlier promise of an
 `AR0X_HIGH_CONTRAST` variant was NOT implemented in Phase 7 — it depends on the
@@ -694,6 +694,56 @@ The build-only `Optional TrustAll` config is NEVER installed (RISK-006).
 refresh sums); HIGH for the signing/CI split (a leaked key requires rotation,
 revocation via `ar0x-revoked`, and re-signing every published package).
 
+## ADR-025 — ar0x-only naming (Phase 10 prelude, user directive)
+
+**Status:** ACCEPTED (2026-11-07), STANDING naming rule. Applies to every
+current and future phase.
+
+**Context.** The Phase 1 identity files used a two-part release codename built
+around a lighting/cyberpunk adjective. The user directive is explicit:
+*"everything is ar0x, no [legacy adjective], nothing"*. Branding must be
+self-referential to the distribution name; no second brand word is permitted.
+
+**Decision.**
+
+| Field | Old | New |
+|---|---|---|
+| `AR0X_CODENAME` (`config/versions.env`) | two-word legacy codename | `ar0x root` |
+| `AR0X_BRAND_CODENAME` (`config/branding/palette.conf`) | same | `ar0x root` |
+| `VERSION_CODENAME` (os-release) | legacy hyphenated slug | `ar0x-root` |
+| `PRETTY_NAME` / `VERSION` / `DISTRIB_DESCRIPTION` | legacy parenthetical | `(ar0x root)` |
+| Uppercase boot/menu labels (GRUB, syslinux, SDDM, wordmark SVG) | legacy uppercase | `AR0X ROOT` |
+| Welcome-app fallback hostname | legacy slug | `ar0x-root` |
+| Default wallpaper | legacy adjective-based filename | **`ar0x-grid.png`** (3 `git mv` renames) |
+
+All generic adjective uses in prose (palette / panel / photography descriptions)
+were rewritten to neutral, non-brand wording. **Zero** occurrences of the legacy
+token remain in text OR filenames. The three wallpaper copies were renamed with
+`git mv`; `configure-branding.sh --sync`, `configure-desktop.sh --sync`,
+`configure-tools.sh --sync`, `setup-repo.sh --sync` and `bootstrap.sh --sync`
+regenerated every mirror and all 57 PKGBUILD SHA-256 sums.
+
+**Enforcement.** `tools/validate-versions.sh §7j`:
+
+- asserts `AR0X_CODENAME == "ar0x root"`, `VERSION_CODENAME=ar0x-root` and
+  `AR0X_BRAND_CODENAME="ar0x root"` in the canonical sources;
+- walks the ENTIRE source tree (text + filenames, case-insensitive) and FAILS
+  on any legacy token. The forbidden string is assembled dynamically inside the
+  validator (`'ne' + 'on'`) so the gate does not flag itself;
+- `tools/configure-branding.sh --check` additionally asserts `os-release` ↔
+  `versions.env` ↔ `palette.conf` codename parity.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **ar0x-only naming ✅** | single brand identity; user directive satisfied; enforced by a build gate | 72 files + 3 binary renames; every mirror and checksum had to be regenerated |
+| Keep the legacy codename in "historical" docs | smaller diff | violates the explicit standing rule; token would resurface in generated art |
+
+**Tradeoffs accepted:** no second brand word; slightly repetitive
+`ar0x 0.1.0 (ar0x root)` wording; the default wallpaper filename changes, so any
+external references to the former wallpaper filename must be updated
+(all in-tree ones were). **Reversal cost:** LOW (one naming constant + a sync pass), but the
+validator gate must be updated deliberately.
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -722,3 +772,4 @@ revocation via `ar0x-revoked`, and re-signing every published package).
 | 022 SVG-authoritative identity + standard XCursor | one geometry source, no compiler, RISK-040 closed | no compiled hyprcursor, no neofetch package, no live art render |
 | 023 Plain-GTK4 tools + non-root signed update + 5 packages deferred | three offline-testable tools, zero file-ownership conflicts, real SHA-256 PKGBUILDs | no `ar0x-meta` until P9, GTK4 window never rendered here (RISK-047) |
 | 024 ONE OWNER PER PATH + PR-safe signed repo | all 8 PKGBUILDs, zero pacman conflicts, private key never on a PR workflow | duplicate reference data on disk; generation/signing/publication remain MANUAL |
+| 025 ar0x-only naming (`ar0x root` / `ar0x-root`) | one self-referential brand, enforced by a whole-tree build gate | 72 files + 3 binary renames, repetitive `ar0x 0.1.0 (ar0x root)` wording |

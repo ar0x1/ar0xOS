@@ -180,7 +180,7 @@ def should_skip(firstboot):
 
 def collect_summary():
     """Ask ar0x-info for JSON. Never raises; always returns a dict of strings."""
-    fallback = {"distro": "ar0x 0.1.0 (Neon Root)", "version": VERSION,
+    fallback = {"distro": "ar0x 0.1.0 (ar0x root)", "version": VERSION,
                 "kernel": "unknown", "arch": "unknown", "wm": "unknown",
                 "shell": "unknown", "desktop": "unknown", "hostname": "unknown"}
     # Read the hook at CALL time (the module-level constant is captured at
@@ -254,9 +254,9 @@ def run_self_test():
     # 3e. Summary parsing with a stub ar0x-info (no installed system needed).
     with tempfile.TemporaryDirectory() as td:
         stub = Path(td) / "ar0x-info"
-        payload = {"distro": "ar0x 0.1.0 (Neon Root)", "kernel": "6.18.59-1",
+        payload = {"distro": "ar0x 0.1.0 (ar0x root)", "kernel": "6.18.59-1",
                    "arch": "x86_64", "desktop": "Hyprland", "wm": "Hyprland",
-                   "shell": "zsh", "hostname": "neon-root", "packages": "109"}
+                   "shell": "zsh", "hostname": "ar0x-root", "packages": "109"}
         stub.write_text("#!/bin/sh\nprintf '%s'\n" %
                         json.dumps(payload).replace("'", "'\\''"), encoding="utf-8")
         stub.chmod(0o755)
@@ -343,7 +343,7 @@ def run_gui(firstboot, write_on_close):
             title.add_css_class("ar0x-title")
             title.set_halign(Gtk.Align.CENTER)
             content.append(title)
-            sub = Gtk.Label(label="0.1.0 \u00b7 Neon Root \u00b7 Developer Edition")
+            sub = Gtk.Label(label="0.1.0 \u00b7 ar0x root \u00b7 Developer Edition")
             sub.add_css_class("ar0x-sub")
             sub.set_halign(Gtk.Align.CENTER)
             content.append(sub)

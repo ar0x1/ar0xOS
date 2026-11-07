@@ -11,7 +11,7 @@
 # -----------------------------------------------------------------------------
 [Plymouth Theme]
 Name=ar0x
-Description=ar0x 0.1.0 "Neon Root" official boot splash (Phase 7)
+Description=ar0x 0.1.0 "ar0x root" official boot splash (Phase 7)
 ModuleName=script
 
 [script]

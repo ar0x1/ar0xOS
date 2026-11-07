@@ -1,6 +1,6 @@
 # ar0x Package Repository Guide — Phase 9 (COMPLETE)
 
-**Distribution:** ar0x `0.1.0` "Neon Root" · Developer Edition
+**Distribution:** ar0x `0.1.0` "ar0x root" · Developer Edition
 **Status:** ✅ COMPLETE — **all 8** `ar0x-*` PKGBUILDs, ONE-OWNER-PER-PATH
 resolution (ADR-024), offline GPG key tooling, `repo-add -s` driver, three
 GitHub Actions workflows, repo policy files, and offline validators.

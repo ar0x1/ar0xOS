@@ -1,5 +1,5 @@
 /* /etc/skel/.config/waybar/style.css
- * ar0x "Neon Root" — palette from config/versions.env (ADR-015).
+ * ar0x "ar0x root" — palette from config/versions.env (ADR-015).
  * Waybar uses GTK3 CSS; only a subset of properties is supported (no flex/gap).
  */
 * {

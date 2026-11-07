@@ -1,6 +1,6 @@
 # ar0x Custom Tools Guide — Phase 8 (COMPLETE)
 
-**Distribution:** ar0x `0.1.0` "Neon Root" · Developer Edition
+**Distribution:** ar0x `0.1.0` "ar0x root" · Developer Edition
 **Status:** ✅ COMPLETE — three tools, three buildable PKGBUILDs, `.desktop` files,
 first-boot units, helpers, canonical configs, driver and offline self-tests.
 **Depends on:** Phase 5 (pacman.conf split), Phase 6 (GTK4/Qt6/SDDM), Phase 7 (brand assets).

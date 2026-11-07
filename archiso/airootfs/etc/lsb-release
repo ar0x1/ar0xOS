@@ -3,5 +3,5 @@
 # still parse DISTRIB_*. Keep both in sync (tools/configure-branding.sh --check).
 DISTRIB_ID="ar0x"
 DISTRIB_RELEASE="0.1.0"
-DISTRIB_CODENAME="Neon Root"
-DISTRIB_DESCRIPTION="ar0x 0.1.0 (Neon Root)"
+DISTRIB_CODENAME="ar0x root"
+DISTRIB_DESCRIPTION="ar0x 0.1.0 (ar0x root)"

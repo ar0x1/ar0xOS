@@ -1,6 +1,6 @@
 /***************************************************************************
  * /usr/share/sddm/themes/ar0x/Main.qml
- * ar0x 0.1.0 "Neon Root" — SDDM 0.21 Qt6 greeter theme.
+ * ar0x 0.1.0 "ar0x root" — SDDM 0.21 Qt6 greeter theme.
  *
  * Qt6 SAFETY: only `QtQuick` and `SddmComponents 2.0` are imported. No
  * QtGraphicalEffects (Qt5-only), no QtMultimedia, no custom QML modules, no
@@ -60,7 +60,7 @@ Rectangle {
         fillMode: Image.PreserveAspectCrop
     }
 
-    // Dark scrim so the neon panel stays legible over any wallpaper.
+    // Dark scrim so the ar0x panel stays legible over any wallpaper.
     Rectangle {
         anchors.fill: parent
         color: "#9907090F"
@@ -103,7 +103,7 @@ Rectangle {
             }
             Text {
                 width: parent.width
-                text: "0.1.0  //  NEON ROOT"
+                text: "0.1.0  //  AR0X ROOT"
                 color: "#FF2E88"
                 font.pixelSize: 12
                 font.family: "JetBrainsMono Nerd Font"

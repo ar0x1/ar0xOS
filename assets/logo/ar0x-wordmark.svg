@@ -7,7 +7,7 @@
      nodes to outlines in Inkscape; the SVG remains the master either way. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" width="1024" height="256"
      role="img" aria-labelledby="ar0x-wordmark-title">
-  <title id="ar0x-wordmark-title">ar0x wordmark — Neon Root</title>
+  <title id="ar0x-wordmark-title">ar0x wordmark — ar0x root</title>
   <g transform="translate(16,16) scale(0.4375)">
     <polygon points="136,24 376,24 488,136 488,376 376,488 136,488 24,376 24,136"
              fill="none" stroke="#00E5FF" stroke-width="28" stroke-linejoin="miter"/>
@@ -24,5 +24,5 @@
   <rect x="274" y="178" width="700" height="4" fill="#FF2E88"/>
   <text x="276" y="222" fill="#6B7891"
         font-family="Inter, sans-serif" font-size="30" font-weight="600"
-        letter-spacing="9">NEON ROOT  /  DEVELOPER EDITION</text>
+        letter-spacing="9">AR0X ROOT  /  DEVELOPER EDITION</text>
 </svg>

@@ -1,6 +1,6 @@
 # ar0x Branding Guide — Phase 7 (COMPLETE)
 
-**Distribution:** ar0x `0.1.0` "Neon Root" · Developer Edition
+**Distribution:** ar0x `0.1.0` "ar0x root" · Developer Edition
 **Base:** Arch Linux · systemd · glibc · Hyprland / Wayland · GRUB · linux-lts `6.18.59-1`
 **Status:** ✅ COMPLETE — identity, ASCII/terminal logos, SVG masters, palette, icon,
 XCursor theme, GRUB/Plymouth/syslinux final art, generated mirrors, validation.
@@ -108,7 +108,7 @@ official `[extra]` package and **is** on the ISO; `fastfetch` remains the defaul
 |---|---|---|---|
 | `assets/logo/ar0x-logo.svg` | `0 0 512 512` | 512×512 px | **MASTER logomark**, transparent background |
 | `assets/logo/ar0x-logo-mono.svg` | `0 0 512 512` | 512×512 px | single-colour `currentColor` variant |
-| `assets/logo/ar0x-wordmark.svg` | `0 0 1024 256` | 1024×256 px | horizontal lockup (mark + `ar0x` + `NEON ROOT / DEVELOPER EDITION`) |
+| `assets/logo/ar0x-wordmark.svg` | `0 0 1024 256` | 1024×256 px | horizontal lockup (mark + `ar0x` + `AR0X ROOT / DEVELOPER EDITION`) |
 | `assets/icons/ar0x-logo.svg` | `0 0 512 512` | scalable | icon-theme variant on a `#07090F` rounded-square plate |
 | `assets/logo/ar0x-logo-256.png` | — | 256×256 px | raster fallback (generated) |
 | `assets/logo/ar0x-logo-512.png` | — | 512×512 px | raster fallback (generated) |
@@ -330,7 +330,14 @@ the checked-in `archiso/airootfs/**` mirrors. `--check` `cmp -s` every pair.
 | Decision | Choice | Why / tradeoff |
 |---|---|---|
 | `ID` | `ar0x`, `ID_LIKE=arch` | Real distro identity, but keeps Arch tool compatibility (e.g. `pacman`, AUR helpers, `arch-install-scripts`). |
-| `VERSION_CODENAME` | `neon-root` | os-release(5) requires a lower-case, space-free identifier. Human form `"Neon Root"` lives in `PRETTY_NAME` and `AR0X_CODENAME`. |
+| `VERSION_CODENAME` | `ar0x-root` | os-release(5) requires a lower-case, space-free identifier. Human form `"ar0x root"` lives in `PRETTY_NAME` and `AR0X_CODENAME`. |
+
+> **ADR-025 (standing naming rule):** branding is ar0x-only. The human codename
+> is `ar0x root` (uppercase `AR0X ROOT` in boot/menu art), the machine identifier
+> is `ar0x-root`, and the default wallpaper is `ar0x-grid.png`. The legacy
+> two-word codename and its adjective are gone from **every** file and filename.
+> `tools/validate-versions.sh §7j` walks the whole source tree and FAILS the
+> build on any reintroduction.
 | `LOGO` | `ar0x-logo` | systemd ≥ 252 field naming a freedesktop icon; we ship the matching scalable icon. Older systemd simply ignores it. |
 | `ANSI_COLOR` | `0;38;2;0;229;255` | 24-bit truecolor cyan; the 8-colour fallback `6` would lose the brand hue. |
 | `/usr/lib/os-release` duplicate | written | `filesystem` package owns `/etc/os-release` as a symlink; one copy alone is fragile. |

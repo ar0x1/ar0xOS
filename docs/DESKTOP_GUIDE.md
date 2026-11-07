@@ -161,7 +161,7 @@ are **generated copies** — never edit them by hand; run `--sync`.
 | `/home/user/ar0xOS/config/desktop/skel/.config/xdg-desktop-portal/hyprland-portals.conf` | `/etc/skel/.config/xdg-desktop-portal/hyprland-portals.conf` |
 | `/home/user/ar0xOS/config/desktop/skel/.icons/default/index.theme` | `/etc/skel/.icons/default/index.theme` |
 | `/home/user/ar0xOS/assets/sddm/ar0x/{Main.qml,metadata.desktop,theme.conf,background.png}` | `/usr/share/sddm/themes/ar0x/` |
-| `/home/user/ar0xOS/assets/wallpapers/ar0x-{neon-grid,void,circuit}.png` | `/usr/share/backgrounds/ar0x/` |
+| `/home/user/ar0xOS/assets/wallpapers/ar0x-{grid,void,circuit}.png` | `/usr/share/backgrounds/ar0x/` |
 
 **Also changed in Phase 6:** `config/packages.x86_64` (+37 packages) and
 `config/system/systemd/system-preset/50-ar0x.preset` (+`enable sddm.service`,
@@ -271,7 +271,7 @@ it so it does not draw over the login form. The greeter runs on Xorg (Arch's
 
 | Path in repo | Installed path | Size | Used by |
 |---|---|---|---|
-| `assets/wallpapers/ar0x-neon-grid.png` | `/usr/share/backgrounds/ar0x/ar0x-neon-grid.png` | 3840×2160 | `hyprpaper.conf` (default desktop) |
+| `assets/wallpapers/ar0x-grid.png` | `/usr/share/backgrounds/ar0x/ar0x-grid.png` | 3840×2160 | `hyprpaper.conf` (default desktop) |
 | `assets/wallpapers/ar0x-void.png` | `/usr/share/backgrounds/ar0x/ar0x-void.png` | 3840×2160 | optional low-distraction wallpaper |
 | `assets/wallpapers/ar0x-circuit.png` | `/usr/share/backgrounds/ar0x/ar0x-circuit.png` | 3840×2160 | `hyprlock.conf` (lock screen) |
 | `assets/sddm/ar0x/background.png` | `/usr/share/sddm/themes/ar0x/background.png` | 1920×1080 | SDDM `theme.conf` |
@@ -285,7 +285,7 @@ generator source; ar0x-authored artwork is CC BY-SA 4.0. **Phase 7 decision
 finalised the BOOT art (GRUB/Plymouth/syslinux) from the official SVG logo and
 shipped the real cursor theme, but deliberately did NOT replace the wallpapers.
 Optional v0.2 sources (Inkscape/Blender from `assets/logo/ar0x-logo.svg`, CC0
-geometry textures from ambientCG / Poly Haven, CC0 neon photography only as a
+geometry textures from ambientCG / Poly Haven, CC0 night-city photography only as a
 layer) are recorded in `assets/wallpapers/PLACEHOLDERS.md`. Every replacement
 PNG must stay under 4 MB and ship a `LICENSE`.
 

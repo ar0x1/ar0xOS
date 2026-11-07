@@ -2,7 +2,7 @@
 # XCursor theme metadata (freedesktop Icon Theme Specification).
 [Icon Theme]
 Name=ar0x Cursors
-Comment=ar0x 0.1.0 "Neon Root" cyan/magenta/lime cursor set
+Comment=ar0x 0.1.0 "ar0x root" cyan/magenta/lime cursor set
 Inherits=Adwaita
 # Inherits is a deliberate SAFETY NET: we ship 5 authored shapes + 12 aliases.
 # Any cursor name we do not provide resolves through Arch's adwaita-cursors,

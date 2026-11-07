@@ -23,7 +23,7 @@
 iso_name="ar0x"
 iso_label="AR0X_010"
 iso_publisher="ar0x <https://github.com/ar0x1/ar0xOS>"
-iso_application="ar0x 0.1.0 Neon Root Live/Install ISO"
+iso_application="ar0x 0.1.0 ar0x root Live/Install ISO"
 iso_version="0.1.0"
 install_dir="ar0x"
 arch="x86_64"

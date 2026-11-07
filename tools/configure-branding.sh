@@ -261,7 +261,18 @@ assert re.fullmatch(r'[a-z0-9-]+', osr['VERSION_CODENAME']), \
 assert osr['PRETTY_NAME'].startswith('ar0x '), 'PRETTY_NAME must start with ar0x'
 assert not re.search(r'\$\{?\w+\}?', open(os.path.join(brand, 'os-release')).read()), \
     'os-release must not contain variable expansion'
-print('[ OK ] os-release: 11 required keys, ID=ar0x, LOGO=ar0x-logo, version parity')
+codename = re.search(r'^AR0X_CODENAME="([^"]+)"', env, re.M).group(1)
+assert codename == 'ar0x root', 'AR0X_CODENAME must be ar0x root'
+assert osr['VERSION_CODENAME'] == 'ar0x-root', \
+    'VERSION_CODENAME must be ar0x-root'
+assert osr.get('AR0X_CODENAME') == codename, \
+    'os-release AR0X_CODENAME != versions.env'
+assert '(ar0x root)' in osr['PRETTY_NAME'], \
+    'PRETTY_NAME must carry the ar0x root codename'
+pal = open(os.path.join(brand, 'palette.conf'), encoding='utf-8').read()
+assert 'AR0X_BRAND_CODENAME="ar0x root"' in pal, \
+    'palette.conf codename parity broken'
+print('[ OK ] os-release: 11 required keys, ID=ar0x, LOGO=ar0x-logo, version + ar0x root codename parity')
 
 lsb = kv(os.path.join(brand, 'lsb-release'))
 assert lsb.get('DISTRIB_ID') == 'ar0x'

@@ -44,10 +44,10 @@
 | Distribution name | `ar0x` |
 | OS `ID` | `ar0x` |
 | `ID_LIKE` | `arch` |
-| First release | `0.1.0`, codename **"Neon Root"** |
+| First release | `0.1.0`, codename **"ar0x root"** |
 | Architecture | `x86_64` only for v0.1 (aarch64 deferred to v0.2) |
 | Target audience | Developers (with a security/privacy-conscious default posture) |
-| Aesthetic | Cyberpunk / Dark-Hacker — near-black bases, neon cyan + magenta accents |
+| Aesthetic | Cyberpunk / Dark-Hacker — near-black bases, cyan + magenta accents |
 | ISO target | ~2 GB ("standard"), hard size gate at 2.2 GB |
 | Installer | Calamares 3.4.3 GUI (auto + manual partitioning) |
 | Channels | `testing` (rolling), `stable` (quarterly ISO refresh) |
@@ -670,7 +670,7 @@ Full procedure: `/home/user/ar0xOS/docs/REPO_GUIDE.md §3`.
 | Property | Value |
 |---|---|
 | Version scheme | `MAJOR.MINOR.PATCH` (`0.1.0`), ISO tag `v0.1.0` |
-| Codename | `Neon Root` for 0.1.x |
+| Codename | `ar0x root` for 0.1.x |
 | Cadence | Quarterly stable ISO; `testing` packages continuous |
 | Artifact set | `.iso`, `SHA256SUMS`, `SHA256SUMS.sig`, `ar0x-0.1.0-x86_64.iso.sig`, `CHANGELOG.md`, `README.md` |
 | Signing | Detached GPG signature with the release key; key fingerprint published in README |
@@ -702,6 +702,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-022 | SVG-authoritative identity, standard XCursor, no AUR fetch tool | one geometry source + no build-time compiler vs. a compiled hyprcursor theme and shipping neofetch |
 | ADR-023 | Plain-GTK4 tools, non-root signed-update wrapper, 5 packages deferred to P9 | real offline-testable CLI tools + zero file-ownership conflicts vs. a full 8-package repo in P8 |
 | ADR-024 | ONE OWNER PER PATH: airootfs overlay owns 92 ISO paths; 5 P9 packages install `/usr/share/ar0x/<pkg>/**` + 3 user-space `ar0x-apply-*` helpers; PR-safe CI with zero secrets | all 8 PKGBUILDs buildable with zero pacman file conflicts vs. duplicate theme data on disk and a second copy step for stock-Arch users |
+| ADR-025 | ar0x-only naming: codename `ar0x root` / `ar0x-root`, boot art `AR0X ROOT`, default wallpaper `ar0x-grid.png`, whole-tree naming gate | one self-referential brand enforced by `validate-versions.sh §7j` vs. 72 files + 3 binary renames and repetitive `(ar0x root)` wording |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |

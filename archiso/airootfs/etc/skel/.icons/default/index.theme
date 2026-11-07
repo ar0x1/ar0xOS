@@ -4,5 +4,5 @@
 # cursor name we did not author still resolves through the official package.
 [Icon Theme]
 Name=ar0x Default
-Comment=ar0x 0.1.0 "Neon Root" cyan/magenta/lime cursors
+Comment=ar0x 0.1.0 "ar0x root" cyan/magenta/lime cursors
 Inherits=ar0x-cursors

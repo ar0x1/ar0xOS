@@ -1,5 +1,5 @@
 -- /etc/skel/.config/hypr/hyprland.lua
--- ar0x 0.1.0 "Neon Root" — Hyprland 0.57.1 configuration ENTRY POINT.
+-- ar0x 0.1.0 "ar0x root" — Hyprland 0.57.1 configuration ENTRY POINT.
 --
 -- ⚠️ Hyprland 0.57 REMOVED hyprland.conf / hyprlang. There is NO converter and
 --    `hyprctl keyword` is disabled under Lua. NEVER create hyprland.conf:

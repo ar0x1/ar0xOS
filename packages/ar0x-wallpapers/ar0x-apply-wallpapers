@@ -15,7 +15,7 @@ set -euo pipefail
 # --- Section 1: paths --------------------------------------------------------
 REF_DIR="${AR0X_WALL_REFDIR:-/usr/share/ar0x/wallpapers}"
 DEST_DIR="${AR0X_WALL_DESTDIR:-${XDG_PICTURES_DIR:-$HOME/Pictures}/ar0x}"
-FILES=(ar0x-neon-grid.png ar0x-void.png ar0x-circuit.png)
+FILES=(ar0x-grid.png ar0x-void.png ar0x-circuit.png)
 
 usage() {
     cat <<'USAGE'

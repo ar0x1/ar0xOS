@@ -178,7 +178,7 @@ background (transparent so the artwork shows). Three entries: normal, failsafe
 ```ini
 [Plymouth Theme]
 Name=ar0x
-Description=ar0x 0.1.0 Neon Root boot splash
+Description=ar0x 0.1.0 ar0x root boot splash
 ModuleName=script
 
 [script]

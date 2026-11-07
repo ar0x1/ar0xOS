@@ -324,7 +324,7 @@ PHASE6_FILES=(
     config/desktop/skel/.icons/default/index.theme
     assets/sddm/ar0x/Main.qml assets/sddm/ar0x/metadata.desktop
     assets/sddm/ar0x/theme.conf assets/sddm/ar0x/background.png
-    assets/wallpapers/ar0x-neon-grid.png assets/wallpapers/ar0x-void.png
+    assets/wallpapers/ar0x-grid.png assets/wallpapers/ar0x-void.png
     assets/wallpapers/ar0x-circuit.png assets/wallpapers/PLACEHOLDERS.md
     tools/configure-desktop.sh tools/gen-desktop-assets.sh docs/DESKTOP_GUIDE.md
 )
@@ -632,6 +632,48 @@ ok "Phase 9 policy gates: Required, db names, signed packages, non-root CI, PR-s
 # shared module so both validators agree on ONE definition.
 python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_repo.py" "${AR0X_SOURCE_ROOT}" \
     || fail "Phase 9 structural validation failed (tools/lib/ar0x_repo.py)."
+
+# --- Section 7j: brand naming gate ("everything is ar0x") -------------------
+# Standing user rule (2026-11-07): the human codename is `ar0x root`, the
+# machine identifier is `ar0x-root`, and ZERO legacy two-word/to-adjective
+# brand tokens remain in ANY source file, filename or generated mirror.
+[[ "${AR0X_CODENAME}" == "ar0x root" ]] \
+    || fail "config/versions.env: AR0X_CODENAME must be 'ar0x root'."
+grep -Fxq 'VERSION_CODENAME=ar0x-root' \
+    "${AR0X_SOURCE_ROOT}/config/branding/os-release" \
+    || fail "config/branding/os-release lost VERSION_CODENAME=ar0x-root."
+grep -Fq 'AR0X_BRAND_CODENAME="ar0x root"' \
+    "${AR0X_SOURCE_ROOT}/config/branding/palette.conf" \
+    || fail "config/branding/palette.conf lost the ar0x root codename."
+grep -Fq 'AR0X_CODENAME="ar0x root"' \
+    "${AR0X_SOURCE_ROOT}/config/versions.env" \
+    || fail "config/versions.env lost the ar0x root codename."
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYTOKEN' || fail "legacy brand token found in the source tree."
+import os, re, sys
+root = sys.argv[1]
+# Assembled dynamically so THIS validator does not contain the forbidden token.
+bad = 'ne' + 'on'
+skip = {'.git', 'build', '__pycache__', '.cache', 'node_modules', '.venv', 'venv'}
+hits = []
+for base, dirs, files in os.walk(root):
+    dirs[:] = [d for d in dirs if d not in skip]
+    for fn in files:
+        rel = os.path.relpath(os.path.join(base, fn), root)
+        if bad in fn.lower():
+            hits.append(rel + ' (filename)')
+        try:
+            txt = open(os.path.join(base, fn), encoding='utf-8').read()
+        except (UnicodeDecodeError, OSError):
+            continue
+        if re.search(bad, txt, re.I):
+            hits.append(rel)
+if hits:
+    for h in sorted(set(hits))[:20]:
+        sys.stderr.write('  [FAIL] legacy brand token in %s\n' % h)
+    sys.exit(1)
+print('[ OK ] ar0x-only naming: zero legacy brand tokens in text or filenames')
+PYTOKEN
+ok "Brand naming gate: codename ar0x root / ar0x-root, zero legacy tokens"
 
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then

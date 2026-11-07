@@ -6,7 +6,7 @@
      |     \  /    N E O N   R O O T      |
       \     \/     0 . 1 . 0  /  x86_64  /
        '--------------------------------'
-       ar0x 0.1.0 "Neon Root"  /  Developer Edition
+       ar0x 0.1.0 "ar0x root"  /  Developer Edition
        Arch + systemd + Hyprland + Wayland + linux-lts 6.18.59-1
 
        Docs    https://github.com/ar0x1/ar0xOS

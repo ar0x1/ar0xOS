@@ -1,5 +1,5 @@
 # /home/user/ar0xOS/assets/grub-theme/ar0x/theme.txt
-# GRUB 2 gfxmenu theme for ar0x 0.1.0 "Neon Root".
+# GRUB 2 gfxmenu theme for ar0x 0.1.0 "ar0x root".
 # PHASE 4 created the theme; PHASE 7 finalised the branded art and layout.
 #
 # Installed at TWO target paths (both are needed):
@@ -72,7 +72,7 @@ terminal-border: "0"
     left = 0
     width = 100%
     height = 20
-    text = "ENTER boot   |   E edit   |   C GRUB shell   |   ar0x 0.1.0 NEON ROOT"
+    text = "ENTER boot   |   E edit   |   C GRUB shell   |   ar0x 0.1.0 AR0X ROOT"
     align = "center"
     color = "#6B7891"
 }

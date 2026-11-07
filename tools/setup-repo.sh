@@ -148,7 +148,7 @@ for n in ('animations','autostart','env','input','keybinds','looknfeel',
           'monitors','palette','programs','rules'):
     pairs.append(('config/desktop/hypr/lua/%s.lua'%n,
                   'packages/ar0x-hypr-config/lua/%s.lua'%n))
-for f in ('ar0x-neon-grid.png','ar0x-void.png','ar0x-circuit.png'):
+for f in ('ar0x-grid.png','ar0x-void.png','ar0x-circuit.png'):
     pairs.append(('assets/wallpapers/'+f, 'packages/ar0x-wallpapers/'+f))
 for f in ('ar0x-logo.svg','ar0x-logo-mono.svg','ar0x-wordmark.svg','LICENSE'):
     pairs.append(('assets/logo/'+f, 'packages/ar0x-wallpapers/'+f))
@@ -253,7 +253,7 @@ PYSUMS
         install -D -m 0644 -- "${AR0X_PACKAGES_DIR}/ar0x-hypr-config/lua/$n.lua" \
             "$p/usr/share/ar0x/hypr-config/lua/$n.lua"
     done
-    for n in ar0x-neon-grid.png ar0x-void.png ar0x-circuit.png; do
+    for n in ar0x-grid.png ar0x-void.png ar0x-circuit.png; do
         install -D -m 0644 -- "${AR0X_PACKAGES_DIR}/ar0x-wallpapers/$n" \
             "$p/usr/share/ar0x/wallpapers/$n"
     done

@@ -13,7 +13,7 @@
 # art set may replace them at the SAME paths without any config churn.
 #
 # Outputs (all absolute paths):
-#   /home/user/ar0xOS/assets/wallpapers/ar0x-neon-grid.png    3840x2160
+#   /home/user/ar0xOS/assets/wallpapers/ar0x-grid.png    3840x2160
 #   /home/user/ar0xOS/assets/wallpapers/ar0x-void.png         3840x2160
 #   /home/user/ar0xOS/assets/wallpapers/ar0x-circuit.png      3840x2160
 #   /home/user/ar0xOS/assets/sddm/ar0x/background.png         1920x1080
@@ -113,8 +113,8 @@ def span(row, width, x0, x1, colour):
     row[x0 * 3:x1 * 3] = bytes(colour) * (x1 - x0)
 
 
-# --- 1. ar0x-neon-grid.png — cyan perspective grid + magenta horizon --------
-def neon_grid(width, height):
+# --- 1. ar0x-grid.png — cyan perspective grid + magenta horizon --------
+def ar0x_grid(width, height):
     horizon = int(height * 0.58)
     vp = width // 2
     # Perspective-spaced horizontal grid lines (fixed set, computed once).
@@ -217,7 +217,7 @@ def sddm_bg(width, height):
 
 
 sizes = []
-sizes.append((os.path.join(WALL, "ar0x-neon-grid.png"), 3840, 2160, neon_grid))
+sizes.append((os.path.join(WALL, "ar0x-grid.png"), 3840, 2160, ar0x_grid))
 sizes.append((os.path.join(WALL, "ar0x-void.png"),      3840, 2160, void_field))
 sizes.append((os.path.join(WALL, "ar0x-circuit.png"),   3840, 2160, circuit))
 sizes.append((os.path.join(SDDM, "background.png"),     1920, 1080, sddm_bg))
@@ -235,7 +235,7 @@ import struct
 
 ROOT = sys.argv[1]
 expected = {
-    "assets/wallpapers/ar0x-neon-grid.png": (3840, 2160),
+    "assets/wallpapers/ar0x-grid.png": (3840, 2160),
     "assets/wallpapers/ar0x-void.png":      (3840, 2160),
     "assets/wallpapers/ar0x-circuit.png":   (3840, 2160),
     "assets/sddm/ar0x/background.png":      (1920, 1080),

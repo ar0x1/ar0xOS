@@ -28,7 +28,7 @@
     "memory", "disk", "localip", "datetime",
     {
       "type": "custom",
-      "format": "  {#5}ar0x 0.1.0  ──  Neon Root  ──  github.com/ar0x1/ar0xOS"
+      "format": "  {#5}ar0x 0.1.0  ──  ar0x root  ──  github.com/ar0x1/ar0xOS"
     }
   ]
 }

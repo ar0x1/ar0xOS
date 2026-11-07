@@ -46,5 +46,5 @@ alias ar0x-info='command -v ar0x-info >/dev/null && ar0x-info || echo "ar0x-info
 # --- First-run hint (Phase 8 replaces with ar0x-welcome) --------------------
 if [[ -o interactive && -z "${AR0X_GREETED:-}" ]]; then
     export AR0X_GREETED=1
-    print -P '%F{cyan}ar0x 0.1.0 "Neon Root"%f — Wayland / Hyprland / zsh'
+    print -P '%F{cyan}ar0x 0.1.0 "ar0x root"%f — Wayland / Hyprland / zsh'
 fi
