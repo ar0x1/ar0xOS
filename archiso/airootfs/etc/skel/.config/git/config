@@ -1,0 +1,26 @@
+# /etc/skel/.config/git/config
+# Developer-oriented defaults. No identity is set: `git config --global
+# user.name` / user.email are the user's own (or ar0x-welcome in Phase 8).
+[init]
+    defaultBranch = main
+[core]
+    editor = nvim
+    autocrlf = input
+    pager = less -FRX
+[color]
+    ui = auto
+[color "diff"]
+    meta = cyan bold
+    frag = magenta bold
+    old = red
+    new = green
+[diff]
+    algorithm = histogram
+[pull]
+    rebase = false
+[fetch]
+    prune = true
+[push]
+    default = simple
+[rerere]
+    enabled = true

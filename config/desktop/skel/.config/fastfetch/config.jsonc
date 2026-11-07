@@ -1,0 +1,22 @@
+// /etc/skel/.config/fastfetch/config.jsonc
+// Phase 7 replaces the ASCII logo with the official ar0x logo and fills in
+// os-release/issue/motd. This is a working placeholder so fastfetch runs on
+// the Phase 6 ISO without a missing-file error.
+{
+  "logo": {
+    "type": "builtin",
+    "source": "arch",
+    "color": { "1": "cyan", "2": "magenta" }
+  },
+  "display": {
+    "separator": "  ──  ",
+    "color": { "keys": "cyan", "title": "magenta" },
+    "key": { "width": 18 }
+  },
+  "modules": [
+    { "type": "title", "key": "ar0x" },
+    "os", "kernel", "uptime", "packages", "shell",
+    "de", "wm", "wmtheme", "terminal", "cpu", "gpu",
+    "memory", "disk", "localip", "datetime"
+  ]
+}

@@ -416,6 +416,62 @@ on the target. This file is never installed on a disk.
 
 **Reversal cost:** LOW (edit a drop-in / preset / sysctl and rebuild).
 
+## ADR-021 — Lua-only desktop, Qt6 SDDM theme, balanced toolkit theming
+
+**Status:** ACCEPTED (Phase 6). **Date:** 2026-11-07.
+
+**Decision 1 — Lua config, modular, official-API-only.** `hyprland.lua` requires
+10 `lua/*.lua` modules in a fixed order (shared data → env → monitors → look →
+binds/rules → autostart LAST). Only `hl.*` calls and config keys appearing in
+Hyprland 0.57's official `example/hyprland.lua` are used. Shared state is
+returned as tables instead of relying on globals crossing protected scopes.
+Two independent validators fail on any `hyprland.conf` anywhere in the tree
+(RISK-002).
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Modular Lua ✅** | isolated errors, reviewable, 0.57-native | needs `require()` path discipline |
+| One 600-line Lua file | no module resolution | one syntax error kills everything |
+| hyprlang `.conf` | familiar | REMOVED in 0.57, no converter |
+
+**Decision 2 — SDDM 0.21 Qt6 greeter, X11 display server.** GDM pulls
+GNOME/libadwaita (rejected in Phase 1); LightDM greeters are X11/GTK-centric.
+SDDM's QML uses only `QtQuick` + `SddmComponents 2.0`, no `QtGraphicalEffects`
+or `Qt5Compat`. `metadata.desktop` declares `QtVersion=6` and `Theme-API=2.0`.
+`InputMethod=` disables SDDM 0.21's on-screen keyboard, which otherwise draws
+over the login form (RISK-038).
+
+**Decision 3 — GTK3/GTK4/Qt5/Qt6 theming without AUR dependencies.**
+GTK3 = `Adwaita-dark` (shipped by `gtk3`) + `~/.config/gtk-3.0/gtk.css`
+overrides. GTK4/libadwaita = `GTK_THEME=Adwaita-dark` + 20 `@define-color`
+variables in `~/.config/gtk-4.0/gtk.css`. Qt5/Qt6 = `qt5ct`/`qt6ct` with
+`style=Fusion` and each package's own `darker.conf`. Icons = `Papirus-Dark`
+(`[extra]`), cursor = `Adwaita` placeholder (RISK-040), fonts = Inter +
+JetBrains Mono Nerd + Noto. **Rejected:** Kvantum + AUR GTK themes (breaks
+reproducibility), `libadwaita-without-adwaita-git` (patched system library),
+and Bibata/Capitaine cursors (AUR-only). A fully standalone ar0x GTK theme
+engine is deferred to the `ar0x-theme` package in Phase 8 (RISK-042).
+
+**Decision 4 — generated placeholder art at the FINAL paths.**
+`gen-desktop-assets.sh` writes three 3840×2160 PNGs and a 1920×1080 SDDM
+background with a pure-zlib encoder (no ImageMagick, no fonts, no network,
+~250 KB total, byte-reproducible). `hyprpaper.conf`, `hyprlock.conf` and
+`theme.conf` reference the installed paths from Phase 1's
+`assets/wallpapers/PLACEHOLDERS.md`, so Phase 7 swaps the art with zero config
+churn. Committing large AI art would risk the 2.2 GiB ISO gate and licensing.
+
+**Decision 5 — no global `GDK_BACKEND` (RISK-039).** Phase 5's choice is
+inherited: forcing Wayland globally breaks GTK apps under XWayland. Both
+`lua/env.lua` and `/etc/environment.d/20-ar0x-desktop.conf` are asserted free
+of it by `--check` and `validate-versions.sh`.
+
+**Decision 6 — one systemd preset owner.** `enable sddm.service` was ADDED to
+Phase 5's `config/system/systemd/system-preset/50-ar0x.preset` rather than
+creating a Phase 6 preset. Two files owning unit state drift apart.
+
+**Reversal cost:** LOW for configs, MEDIUM for the SDDM QML theme (needs a Qt6
+greeter to re-test).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -440,3 +496,4 @@ on the target. This file is never installed on a disk.
 | 018 hooks + staged profile | no deprecated code, clean Git tree | one extra profile copy; build-time repo SigLevel relaxed |
 | 019 stock LTS + zstd initramfs | zero kernel maintenance, fast boot | cannot enable options Arch left off; no fallback initramfs |
 | 020 NetworkManager + balanced hardening | developer tools keep working | less kernel lockdown than a hardened distro |
+| 021 Lua-only desktop + Qt6 SDDM | 0.57 correctness, no AUR deps, reproducible art | no custom GTK/Qt theme engine yet; placeholder cursor/art |

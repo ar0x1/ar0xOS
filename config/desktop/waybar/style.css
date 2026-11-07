@@ -1,0 +1,58 @@
+/* /etc/skel/.config/waybar/style.css
+ * ar0x "Neon Root" — palette from config/versions.env (ADR-015).
+ * Waybar uses GTK3 CSS; only a subset of properties is supported (no flex/gap).
+ */
+* {
+    font-family: "JetBrainsMono Nerd Font", "Inter", sans-serif;
+    font-size: 12px;
+    border: none;
+    border-radius: 0;
+    min-height: 0;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+window#waybar {
+    background: #07090F;
+    color: #D7E0EE;
+    border-bottom: 2px solid #00E5FF;
+}
+
+#workspaces button {
+    padding: 0 8px;
+    margin: 0 2px;
+    background: #11151F;
+    color: #6B7891;
+    border-bottom: 2px solid transparent;
+}
+#workspaces button.active {
+    color: #00E5FF;
+    background: #11151F;
+    border-bottom: 2px solid #00E5FF;
+}
+#workspaces button.urgent {
+    color: #FF5C57;
+    border-bottom: 2px solid #FF5C57;
+}
+#workspaces button:hover { background: #11151F; color: #D7E0EE; }
+
+#mode, #window, #clock, #cpu, #memory, #battery, #backlight,
+#network, #pulseaudio, #idle_inhibitor, #tray {
+    padding: 0 8px;
+    margin: 0 2px;
+    background: #11151F;
+    color: #D7E0EE;
+}
+
+#clock { color: #00E5FF; font-weight: bold; }
+#network { color: #A8FF60; }
+#network.disconnected { color: #FF5C57; }
+#pulseaudio { color: #FF2E88; }
+#pulseaudio.muted { color: #6B7891; }
+#cpu { color: #D7E0EE; }
+#memory { color: #D7E0EE; }
+#battery { color: #A8FF60; }
+#battery.warning { color: #FF5C57; }
+#battery.critical { color: #FF5C57; font-weight: bold; }
+#idle_inhibitor.activated { color: #FF2E88; }
+#tray > widget { padding: 0 4px; }

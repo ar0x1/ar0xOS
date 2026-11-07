@@ -65,6 +65,31 @@ drop-in forcing `aa-complain` (RISK-008). NetworkManager is enabled while
 ROLLING with `[ar0x] SigLevel = Required`; the frozen archive mirror exists only
 in `config/pacman.conf.build` (RISK-006).
 
+**Phase 6 verified facts (retrieved 2026-11-07):** Hyprland **0.57** config is
+`$XDG_CONFIG_HOME/hypr/hyprland.lua`; `require("lua.palette")` resolves to
+`./lua/palette.lua` relative to the entry point, and each `require` is a
+protected Lua scope. The typed API is `hl.config({...})`, `hl.bind(key,
+hl.dsp.*(...))`, `hl.env(name, value)`, `hl.monitor({...})`,
+`hl.window_rule({...})`, `hl.curve(name, {...})`, `hl.animation({...})`,
+`hl.on("hyprland.start", fn)` and `hl.exec_cmd(cmd)`. Only keys present in
+Hyprland's official `example/hyprland.lua` are used in ar0x, so
+`Hyprland --verify-config` cannot fail on an invented option. Hyprland 0.57
+also replaced legacy `hyprctl dispatch dpms off` with
+`hl.dsp.dpms({ action = "disable"|"enable" })`; ar0x `hypridle.conf` uses it.
+hyprpaper 0.8.5 uses `wallpaper { monitor = ; path = ; fit_mode = cover }`
+blocks (NOT the old `preload =` / `wallpaper = ,path` syntax). hyprlock 0.9.7
+uses `rgba(RRGGBBAA)` / `rgb(r,g,b)` colours and REQUIRES a config file.
+Arch `sddm 0.21.0-7` (Qt6 greeter) hard-depends on `xorg-server`, so the
+greeter is X11 while the user session is Wayland; SDDM 0.21 enables an OSK by
+default, disabled with `InputMethod=`. SddmComponents 2.0 `TextBox`/`PasswordBox`
+`color` is the FIELD background and `textColor` is the text — not the reverse.
+`QT_QPA_PLATFORMTHEME=qt5ct:qt6ct` (colon list) themes Qt5 and Qt6 from one
+variable; `QT_QPA_PLATFORM=wayland;xcb` (semicolon list) is the platform list.
+GTK4/libadwaita ignores `gtk-theme-name` and only honours `GTK_THEME` plus
+`@define-color` overrides loaded at process start. Papirus, Adwaita cursors,
+`inter-font`, `ttf-jetbrains-mono-nerd` and `noto-fonts(-emoji)` are all in
+Arch `[extra]`, so no AUR package is needed for the theme (RISK-004).
+
 **ADR-017 consequence:** HARD-pinned packages are built with `makepkg -s` from exact upstream
 tarballs into `[ar0x]`, and `config/pacman.conf.build` lists `[ar0x]` **first** via a local
 `file://` server. Never enable `[extra-testing]` in the build config.

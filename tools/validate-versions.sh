@@ -68,9 +68,8 @@ ok "All ${#REQUIRED_KEYS[@]} required version keys are non-empty"
 if [[ "${AR0X_HYPR_CONFIG_FORMAT}" != "lua" || "${AR0X_HYPR_CONFIG_ENTRY}" != "hyprland.lua" ]]; then
     fail "Hyprland >= 0.57 requires Lua config. Set AR0X_HYPR_CONFIG_FORMAT=lua and AR0X_HYPR_CONFIG_ENTRY=hyprland.lua."
 fi
-STRAY_CONF="$(find "${AR0X_SOURCE_ROOT}/config" "${AR0X_SOURCE_ROOT}/archiso" \
-                  "${AR0X_SOURCE_ROOT}/packages" -type f -name 'hyprland.conf' \
-                  -print 2>/dev/null || true)"
+STRAY_CONF="$(find "${AR0X_SOURCE_ROOT}" -path "${AR0X_SOURCE_ROOT}/.git" -prune -o \
+                  -type f -name 'hyprland.conf' -print 2>/dev/null || true)"
 if [[ -n "$STRAY_CONF" ]]; then
     fail "Stray hyprland.conf found (0.57 ignores it): ${STRAY_CONF//$'\n'/, }"
 fi
@@ -176,6 +175,9 @@ REQUIRED_DIRS=(
     config/kernel config/mkinitcpio.d config/default config/plymouth
     assets/grub-theme/ar0x assets/plymouth/ar0x assets/syslinux
     archiso/grub/themes/ar0x archiso/airootfs/usr/share/plymouth/themes/ar0x
+    config/desktop/etc config/desktop/skel config/desktop/hypr/lua
+    assets/sddm/ar0x archiso/airootfs/usr/share/sddm/themes/ar0x
+    archiso/airootfs/usr/share/backgrounds/ar0x archiso/airootfs/etc/skel
 )
 for d in "${REQUIRED_DIRS[@]}"; do
     [[ -d "${AR0X_SOURCE_ROOT}/${d}" ]] || fail "Missing directory: ${d}/"
@@ -262,6 +264,85 @@ grep -Fq 'kernel.unprivileged_userns_clone = 1' \
 [[ ! -d "${AR0X_SOURCE_ROOT}/config/system/apparmor" ]] \
     || fail "Empty config/system/apparmor/ skeleton present; ar0x ships no custom profiles."
 ok "Phase 5 policy gates: userns enabled, AppArmor complain, WP 0.5+ path"
+
+# --- Section 7f: Phase 6 deliverable files + desktop policy gates ------------
+PHASE6_FILES=(
+    config/desktop/hypr/hyprland.lua
+    config/desktop/hypr/lua/palette.lua config/desktop/hypr/lua/programs.lua
+    config/desktop/hypr/lua/env.lua config/desktop/hypr/lua/monitors.lua
+    config/desktop/hypr/lua/looknfeel.lua config/desktop/hypr/lua/animations.lua
+    config/desktop/hypr/lua/input.lua config/desktop/hypr/lua/keybinds.lua
+    config/desktop/hypr/lua/rules.lua config/desktop/hypr/lua/autostart.lua
+    config/desktop/hypr/hyprpaper.conf config/desktop/hypr/hyprlock.conf
+    config/desktop/hypr/hypridle.conf
+    config/desktop/waybar/config.jsonc config/desktop/waybar/style.css
+    config/desktop/gtk-3.0/settings.ini config/desktop/gtk-3.0/gtk.css
+    config/desktop/gtk-4.0/settings.ini config/desktop/gtk-4.0/gtk.css
+    config/desktop/qt5ct/qt5ct.conf config/desktop/qt6ct/qt6ct.conf
+    config/desktop/fontconfig/conf.d/99-ar0x-fonts.conf
+    config/desktop/kitty/kitty.conf config/desktop/wofi/config
+    config/desktop/wofi/style.css config/desktop/mako/config
+    config/desktop/xdg/mimeapps.list
+    config/desktop/etc/sddm.conf.d/10-ar0x.conf
+    config/desktop/etc/environment.d/20-ar0x-desktop.conf
+    config/desktop/etc/xdg/user-dirs.defaults
+    config/desktop/skel/.zshrc config/desktop/skel/.zshenv
+    config/desktop/skel/.profile config/desktop/skel/.bashrc
+    config/desktop/skel/.config/starship.toml
+    config/desktop/skel/.config/hypr/hyprland.lua
+    config/desktop/skel/.config/waybar/config.jsonc
+    config/desktop/skel/.config/gtk-4.0/gtk.css
+    config/desktop/skel/.icons/default/index.theme
+    assets/sddm/ar0x/Main.qml assets/sddm/ar0x/metadata.desktop
+    assets/sddm/ar0x/theme.conf assets/sddm/ar0x/background.png
+    assets/wallpapers/ar0x-neon-grid.png assets/wallpapers/ar0x-void.png
+    assets/wallpapers/ar0x-circuit.png assets/wallpapers/PLACEHOLDERS.md
+    tools/configure-desktop.sh tools/gen-desktop-assets.sh docs/DESKTOP_GUIDE.md
+)
+for f in "${PHASE6_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 6 deliverable: ${f}"
+done
+ok "Phase 6 deliverable files present (${#PHASE6_FILES[@]} files)"
+
+# RISK-002: the entry point must be a Lua file that actually requires modules.
+grep -Fq 'require("lua.palette")' \
+    "${AR0X_SOURCE_ROOT}/config/desktop/hypr/hyprland.lua" \
+    || fail "Phase 6: hyprland.lua is not a modular Lua entry point."
+# RISK-039: a global GDK_BACKEND breaks XWayland GTK applications.
+if grep -v '^[[:space:]]*#' \
+        "${AR0X_SOURCE_ROOT}/config/desktop/etc/environment.d/20-ar0x-desktop.conf" \
+        | grep -Eq '^[[:space:]]*GDK_BACKEND[[:space:]]*='; then
+    fail "Phase 6 / RISK-039: global GDK_BACKEND in environment.d."
+fi
+grep -Fq 'qt5ct:qt6ct' \
+    "${AR0X_SOURCE_ROOT}/config/desktop/hypr/lua/env.lua" \
+    || fail "Phase 6: QT_QPA_PLATFORMTHEME must cover Qt5 AND Qt6 (qt5ct:qt6ct)."
+# RISK-038: SDDM 0.21 greeter is Qt6; the theme must declare it.
+grep -Fq 'QtVersion=6' "${AR0X_SOURCE_ROOT}/assets/sddm/ar0x/metadata.desktop" \
+    || fail "Phase 6 / RISK-038: SDDM theme metadata must declare QtVersion=6."
+grep -Fq 'import SddmComponents 2.0' "${AR0X_SOURCE_ROOT}/assets/sddm/ar0x/Main.qml" \
+    || fail "Phase 6: Main.qml must import SddmComponents 2.0."
+grep -Fxq 'enable sddm.service' \
+    "${AR0X_SOURCE_ROOT}/config/system/systemd/system-preset/50-ar0x.preset" \
+    || fail "Phase 6: sddm.service must be enabled in 50-ar0x.preset."
+# ADR-015: palette parity between versions.env and the compositor palette.
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYV' || fail "Phase 6 palette drift detected."
+import os, re, sys
+root = sys.argv[1]
+env = open(os.path.join(root, 'config/versions.env'), encoding='utf-8').read()
+pins = dict(re.findall(r'^AR0X_(VOID|SURFACE|CYAN|MAGENTA|LIME|TEXT|MUTED|ALERT)="(#[0-9A-Fa-f]{6})"',
+                       env, flags=re.M))
+keys = {'VOID':'void','SURFACE':'surface','CYAN':'cyan','MAGENTA':'magenta',
+        'LIME':'lime','TEXT':'text','MUTED':'muted','ALERT':'alert'}
+pal = open(os.path.join(root, 'config/desktop/hypr/lua/palette.lua'), encoding='utf-8').read()
+qml = open(os.path.join(root, 'assets/sddm/ar0x/Main.qml'), encoding='utf-8').read()
+assert len(pins) == 8, 'expected 8 palette pins'
+for k, v in pins.items():
+    assert re.search(r'\b%s\s*=\s*"%s"' % (keys[k], re.escape(v)), pal), 'palette.lua ' + k
+    assert v in qml, 'Main.qml ' + k
+print('[ OK ] 8 palette pins: versions.env == lua/palette.lua == Main.qml')
+PYV
+ok "Phase 6 policy gates: Lua-only, Qt6 SDDM, Qt5+Qt6 theming, palette parity"
 
 PKG_DUPES="$(sed '/^[[:blank:]]*#.*/d;s/#.*//;/^[[:blank:]]*$/d' \
     "${AR0X_SOURCE_ROOT}/config/packages.x86_64" | sort | uniq -d)"

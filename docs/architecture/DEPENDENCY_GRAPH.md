@@ -261,11 +261,12 @@ S1 → S2                  S2 → S3,S4              S3 → S5                 S
 | 14 | K4 | install Plymouth `ar0x` script theme + `plymouth` hook into the initramfs | 11, 13 |
 | 15 | K3 | ar0x GRUB gfxmenu theme (fontless, `--themes=""`) + branded UEFI/BIOS configs | 9, 11 |
 | 16 | K5 | isolinux/syslinux/efiboot ISO boot catalogs | 14, 15 |
-| 17 | D1 | install Hyprland 0.57.1 + `hyprland.lua` ⚠️ Lua | 9, 10 |
-| 18 | D2/D3 | ecosystem, Waybar, launcher, notify, SDDM theme | 12, 17, 11 |
-| 19 | D4 | GTK3/GTK4, Qt5/Qt6, icons, cursors, fontconfig | 10, 11 |
-| 20 | D5 | wallpapers + `/usr/share/backgrounds/ar0x/` | 10 |
-| 21 | D6 | `/etc/skel` (zsh, starship, hypr Lua, waybar, fastfetch) | 12, 17, 18, 19, 20 |
+| 17 | D1 | `gen-desktop-assets.sh`: 3× 4K wallpapers + SDDM bg (deterministic PNGs) | 10 |
+| 18 | D2 | 37 Phase 6 packages appended to `config/packages.x86_64`; `enable sddm.service` added to `50-ar0x.preset` | 5, 12 |
+| 19 | D3 | `hyprland.lua` + 10 `lua/*.lua` modules + `hyprpaper`/`hyprlock`/`hypridle` ⚠️ **Lua ONLY, zero `.conf`** | 9, 10, 18 |
+| 20 | D4 | GTK3/GTK4, Qt5/Qt6 (`qt5ct:qt6ct`), fontconfig, icons, cursors, Waybar/kitty/wofi/mako | 10, 18 |
+| 21 | D5 | SDDM Qt6 QML theme (`Main.qml`, `metadata.desktop`, `theme.conf`, bg.png) + `/etc/sddm.conf.d/10-ar0x.conf` | 10, 17, 18 |
+| 21b | D6 | `configure-desktop.sh --sync`: render `config/desktop/<tool>/**` → `skel/.config/**`, mirror `skel/**` → `/etc/skel/**`, `etc/**` → `/etc/**`, art → `/usr/share/**`; `--apply` refreshes caches + `preset-all` + `Hyprland --verify-config` | 12, 17, 19, 20, 21 |
 | 22 | T1–T4 | `ar0x-welcome`, `ar0x-update`, `ar0x-info`, `.desktop`, first-boot unit | 11, 21 |
 | 23 | T5 | `makepkg -s` → 8 signed `.pkg.tar.zst` packages | 21, 22 |
 | 24 | R1 | GPG keys in `/opt/ar0x-build/keys` (mode 0700) | 3 |
@@ -318,6 +319,10 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | Frozen build `pacman.conf` copied to `/etc` | installed system pinned to 2026-11-01 (RISK-006/032) | Two configs; `configure-system.sh --sync` writes only `pacman.conf.installed` to `/etc`; two validators |
 | `sysctl --system` / `nft -f` inside a chroot | reconfigures the HOST kernel (RISK-034) | `--apply` uses only `-c`/`-cf` syntax checks |
 | WirePlumber fragment in 0.4 `/etc/wireplumber/` | silently ignored on WP 0.5+ (RISK-037) | `/etc/pipewire/wireplumber.conf.d/`; legacy dir removed and asserted absent |
+| A stray `hyprland.conf` | 0.57 ignores it → emergency binds / broken session (RISK-002) | Tree-wide `find` sweep in `validate-versions.sh` + `configure-desktop.sh --check` |
+| Qt5-only QML imports in the SDDM theme | Qt6 greeter fails to load (RISK-038) | `QtVersion=6` metadata + import-line assertion; no `QtGraphicalEffects` |
+| Global `GDK_BACKEND` | breaks XWayland GTK apps (RISK-039) | Comment-safe grep in two validators |
+| Editing a GENERATED `skel/.config/**` copy directly | next `--sync` silently reverts it | `--check` asserts every generated copy is byte-identical to canonical |
 | Calamares built before Qt/KPMcore present | Link/compile failure | `R4 → I1` plus Phase 2 host package check |
 
 ---

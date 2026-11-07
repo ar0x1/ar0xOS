@@ -1,0 +1,11 @@
+# /etc/xdg/user-dirs.defaults
+# xdg-user-dirs creates these in /etc/skel/.config/user-dirs.dirs on first
+# login. Kept in sync with config/desktop/skel/.config/user-dirs.dirs.
+DESKTOP=Desktop
+DOWNLOAD=Downloads
+TEMPLATES=Templates
+PUBLICSHARE=Public
+DOCUMENTS=Documents
+MUSIC=Music
+PICTURES=Pictures
+VIDEOS=Videos

@@ -1,0 +1,16 @@
+/* /etc/skel/.config/wofi/style.css */
+window { background-color: #07090F; border: 2px solid #00E5FF; }
+#input {
+    background-color: #11151F;
+    color: #D7E0EE;
+    border: 1px solid #6B7891;
+    padding: 8px;
+    font-family: "Inter";
+}
+#input:focus { border-color: #00E5FF; }
+#inner-box { background-color: #07090F; }
+#outer-box { background-color: #07090F; padding: 8px; }
+#entry { color: #D7E0EE; padding: 6px; font-family: "Inter"; }
+#entry:selected { background-color: #11151F; color: #00E5FF; }
+#img { margin-right: 8px; }
+#text { color: #D7E0EE; }

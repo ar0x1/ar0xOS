@@ -1,0 +1,42 @@
+/* /etc/skel/.config/gtk-4.0/gtk.css
+ * GTK4 / libadwaita colour overrides. GTK4 loads this file automatically.
+ * libadwaita reads @define-color variables ONLY at process startup — a running
+ * D-Bus-activated app (nautilus, geary, ...) must be restarted to pick up a
+ * palette change. There is no light/dark switch: ar0x is dark-only by design.
+ *
+ * The @define-color block is the important part. The selectors below only
+ * affect GTK4 apps that do NOT use libadwaita.
+ */
+@define-color window_bg_color        #07090F;
+@define-color window_fg_color        #D7E0EE;
+@define-color view_bg_color          #11151F;
+@define-color view_fg_color          #D7E0EE;
+@define-color headerbar_bg_color     #11151F;
+@define-color headerbar_fg_color     #D7E0EE;
+@define-color headerbar_border_color #6B7891;
+@define-color card_bg_color          #11151F;
+@define-color card_fg_color          #D7E0EE;
+@define-color popover_bg_color       #11151F;
+@define-color popover_fg_color       #D7E0EE;
+@define-color sidebar_bg_color       #07090F;
+@define-color sidebar_fg_color       #D7E0EE;
+@define-color accent_bg_color        #00E5FF;
+@define-color accent_fg_color        #07090F;
+@define-color accent_color           #00E5FF;
+@define-color destructive_bg_color   #FF5C57;
+@define-color destructive_fg_color   #07090F;
+@define-color success_bg_color       #A8FF60;
+@define-color success_fg_color       #07090F;
+@define-color warning_bg_color       #FF2E88;
+@define-color warning_fg_color       #07090F;
+@define-color error_bg_color         #FF5C57;
+@define-color error_fg_color         #07090F;
+
+window { background-color: #07090F; color: #D7E0EE; }
+headerbar { background-color: #11151F; color: #D7E0EE; }
+textview, entry { background-color: #07090F; color: #D7E0EE; }
+entry:focus-within { border-color: #00E5FF; }
+button { background-color: #11151F; color: #D7E0EE; border: 1px solid #6B7891; }
+button:hover { border-color: #00E5FF; }
+button:suggested-action { background-color: #00E5FF; color: #07090F; }
+selection { background-color: #00E5FF; color: #07090F; }

@@ -1,0 +1,14 @@
+[SddmGreeterTheme]
+Name=ar0x
+Description=ar0x 0.1.0 "Neon Root" — cyberpunk/dark-hacker SDDM theme
+Author=ar0x contributors
+Copyright=(c) 2026 ar0x contributors
+License=CC-BY-SA-4.0
+Type=sddm-theme
+Version=0.1.0
+Website=https://github.com/ar0x1/ar0xOS
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=ar0x
+Theme-API=2.0
+QtVersion=6

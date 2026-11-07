@@ -8,6 +8,9 @@ enable bluetooth.service
 enable systemd-timesyncd.service
 enable systemd-userdbd.service
 enable plymouth-quit-wait.service
+# Phase 6: SDDM 0.21 (Qt6 greeter) starts the Wayland/Hyprland session.
+# `preset-all` is re-run by tools/configure-desktop.sh --apply.
+enable sddm.service
 
 # ⚠️ Two DHCP clients fighting over one link is a classic broken-network bug.
 disable systemd-networkd.service

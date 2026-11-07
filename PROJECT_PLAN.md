@@ -213,6 +213,12 @@ Two roots are deliberately separated:
 │   │   ├── DEPENDENCY_GRAPH.md
 │   │   ├── DECISIONS.md
 │   │   └── RISK_REGISTER.md
+│   ├── BUILD_HOST.md                      # Phase 2
+│   ├── BOOTSTRAP_GUIDE.md                 # Phase 3
+│   ├── KERNEL_BOOT.md                     # Phase 4
+│   ├── SYSTEM_CONFIG.md                   # Phase 5
+│   ├── DESKTOP_GUIDE.md                   # Phase 6
+│   ├── INSTALLER_FLOW.md                  # Phase 10
 │   ├── TESTING_CHECKLIST.md               # Phase 11
 │   └── RELEASE_NOTES_TEMPLATE.md          # Phase 12
 ├── config/
@@ -235,13 +241,15 @@ Two roots are deliberately separated:
 │   │   ├── systemd/
 │   │   ├── security/
 │   │   └── locale/
-│   ├── desktop/                           # Phase 6
-│   │   ├── hypr/hyprland.lua              # ⚠️ Lua, not .conf
-│   │   ├── waybar/
-│   │   ├── gtk-3.0/ , gtk-4.0/
-│   │   ├── qt5ct/ , qt6ct/
-│   │   ├── fontconfig/
-│   │   └── skel/                          # → /etc/skel in airootfs
+│   ├── desktop/                           # Phase 6 ✅
+│   │   ├── hypr/hyprland.lua + lua/*.lua  # ⚠️ Lua ONLY (0.57 removed .conf)
+│   │   ├── hypr/{hyprpaper,hyprlock,hypridle}.conf
+│   │   ├── waybar/ , kitty/ , wofi/ , mako/
+│   │   ├── gtk-3.0/ , gtk-4.0/ , qt5ct/ , qt6ct/ , fontconfig/
+│   │   ├── xdg/mimeapps.list
+│   │   ├── etc/{sddm.conf.d,environment.d,xdg}/  # → /etc/** 1:1
+│   │   └── skel/                          # → /etc/skel/** 1:1 (11 dotfiles)
+│   │       └── .config/{hypr,waybar,gtk-*,qt*ct,...} # GENERATED copies
 │   ├── branding/                          # Phase 7
 │   │   ├── os-release, lsb-release, issue, motd
 │   │   ├── fastfetch/
@@ -267,11 +275,11 @@ Two roots are deliberately separated:
 │   └── bootstrap.sh                       # Phase 3
 ├── assets/
 │   ├── logo/ar0x-logo.svg                 # Phase 7
-│   ├── wallpapers/                        # Phase 6/7 (placeholder paths)
+│   ├── wallpapers/                        # Phase 6 ✅ 3x 4K PNG + PLACEHOLDERS.md
 │   ├── plymouth/ar0x/                     # Phase 4/7
 │   ├── grub-theme/ar0x/                   # Phase 4/7
 │   ├── syslinux/splash.png                 # Phase 4/7
-│   ├── sddm/ar0x/                         # Phase 6/7
+│   ├── sddm/ar0x/                         # Phase 6 ✅ Qt6 QML theme + bg.png
 │   ├── icons/ , cursors/
 │   └── ascii/ar0x-ascii.txt               # Phase 7
 ├── packages/                              # Phase 8 — PKGBUILDs
@@ -285,7 +293,8 @@ Two roots are deliberately separated:
 │   ├── build-kernel.sh                    # Phase 4
 │   ├── gen-theme-assets.sh                # Phase 4 — deterministic PNG artwork
 │   ├── configure-system.sh                # Phase 5 — core system config
-│   ├── configure-desktop.sh               # Phase 6
+│   ├── configure-desktop.sh               # Phase 6 — --check/--sync/--apply
+│   ├── gen-desktop-assets.sh              # Phase 6 — deterministic 4K wallpapers
 │   ├── setup-repo.sh                      # Phase 9
 │   ├── build-iso.sh                       # Phase 11 (master orchestrator)
 │   ├── checksum.sh                        # Phase 11
@@ -311,10 +320,13 @@ Two roots are deliberately separated:
 └── logs/                                  # per-stage build logs
 ```
 
-**Rule:** `config/system/**` mirrors the target `/etc/**` tree 1:1 so that Phase 3's overlay
-copy is a mechanical `cp -a config/system/. archiso/airootfs/etc/`. A file at
-`config/system/NetworkManager/conf.d/ar0x.conf` must land at
-`/etc/NetworkManager/conf.d/ar0x.conf` in both the live image and the installed system.
+**Rule:** `config/system/**` mirrors the target `/etc/**` tree 1:1, as do
+`config/desktop/skel/**` → `/etc/skel/**` and `config/desktop/etc/**` → `/etc/**`
+(Phase 6). A file at `config/system/NetworkManager/conf.d/10-ar0x.conf` lands at
+`/etc/NetworkManager/conf.d/10-ar0x.conf`; a file at
+`config/desktop/etc/sddm.conf.d/10-ar0x.conf` lands at `/etc/sddm.conf.d/10-ar0x.conf`.
+Generated copies under `config/desktop/skel/.config/{hypr,waybar,gtk-*,qt*ct,...}` and
+`archiso/airootfs/**` are produced by `--sync` and must NEVER be hand-edited.
 
 ---
 
@@ -618,6 +630,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-018 | pacman hooks + staged profile | No deprecated code, clean Git tree vs. one extra copy |
 | ADR-019 | Stock LTS + zstd initramfs | Zero kernel maintenance vs. cannot enable config options Arch left off |
 | ADR-020 | NetworkManager + balanced hardening | Developer tool compatibility vs. maximal kernel lockdown |
+| ADR-021 | Lua-only desktop, Qt6 SDDM, balanced toolkit theming | 0.57 correctness + reproducibility vs. a full custom GTK/Qt theme engine |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -674,8 +687,8 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 3 | Base System Bootstrap | Full archiso 92 profile (`profiledef.sh`, `pacman.conf`, `packages.x86_64`, `bootstrap_packages.x86_64`, `airootfs/`, `grub/`, `syslinux/`), `config/pacman.conf.build` frozen mirror, `tools/bootstrap.sh`, `docs/BOOTSTRAP_GUIDE.md` chroot guide | `bootstrap.sh --check` passes; `mkarchiso` produces a bootable minimal live root |
 | **4** | Kernel & Boot ✅ | RISK-001: **stock LTS, ZERO patches**; `config/kernel/{README.md,ar0x-lts.config}` audit contract, `config/{mkinitcpio.conf,mkinitcpio.d,default/grub,plymouth/plymouthd.conf}`, ar0x GRUB/Plymouth/syslinux themes, `assets/` deterministic PNG generator, `tools/build-kernel.sh`, `docs/KERNEL_BOOT.md` | `build-kernel.sh --check` + `--self-test` pass; QEMU UEFI+BIOS splash QA is manual |
 | **5** | Core System Configuration ✅ | NetworkManager (systemd-networkd/dhcpcd disabled), PipeWire + WirePlumber 0.5+, Wayland env, live user/sudo/polkit, locale/tz/keymap, journald/logind, default-drop nftables, AppArmor complain, balanced sysctl — 23 files under `config/system/**`, plus `config/pacman.conf.installed` (rolling), `config/repo/pacman.conf.ar0x-entry`, `tools/configure-system.sh`, `docs/SYSTEM_CONFIG.md` | `configure-system.sh --check` passes; `validate-versions.sh` clean with ZERO warnings; QEMU unit/WiFi/audio QA is manual |
-| **6** | Desktop & Theming ← **NEXT (awaiting confirmation)** | Hyprland **Lua** config, GTK3/GTK4, Qt5/Qt6, icons, cursors, fontconfig, wallpapers, SDDM theme, `/etc/skel`, `tools/configure-desktop.sh` | Wayland session renders; theme applied to GTK+Qt apps |
-| 7 | Branding & Identity | `/etc/os-release`, `lsb-release`, `issue`, `motd`, ASCII logo, SVG logo spec, palette, Plymouth + GRUB themes | `fastfetch` shows ar0x identity |
+| **6** | Desktop & Theming ✅ | Hyprland **Lua** entry + 10 modules, `hyprpaper`/`hyprlock`/`hypridle`, Waybar, SDDM 0.21 **Qt6** QML theme, GTK3/GTK4 (libadwaita `@define-color`), Qt5/Qt6 via `qt5ct:qt6ct`, Papirus icons, Adwaita cursor placeholder, Inter/JetBrainsMono Nerd fontconfig, 3× 4K wallpapers, 11 `/etc/skel` dotfiles + 10 generated `.config` trees, `tools/configure-desktop.sh`, `tools/gen-desktop-assets.sh`, `docs/DESKTOP_GUIDE.md` | `configure-desktop.sh --check` + `validate-versions.sh` (0 warnings) pass; `Hyprland --verify-config`, `sddm-greeter --test-mode`, QEMU Wayland QA are manual |
+| **7** | Branding & Identity ← **NEXT (awaiting confirmation)** | `/etc/os-release`, `lsb-release`, `issue`, `motd`, ASCII logo, SVG logo spec, palette, Plymouth + GRUB themes | `fastfetch` shows ar0x identity |
 | 8 | Custom ar0x Tools | `ar0x-welcome` (GTK4), `ar0x-update`, `ar0x-info`, `.desktop` files, PKGBUILDs | All three run; packages install cleanly |
 | 9 | Package Repository | `[ar0x]` repo, `repo-add` + signing, GitHub Actions CI, `pacman.conf` entry, `tools/setup-repo.sh` | Signed install from repo works on a clean system |
 | 10 | Installer | Calamares 3.4.3 branding modules, `settings.conf`, all module configs, step-by-step test flow | Full install → reboot → first boot succeeds |
@@ -734,4 +747,10 @@ rule that trimming `linux-firmware` is the *first* size-reduction lever.
 - WirePlumber 0.5+ config locations (moved into the pipewire config dir) — <https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/locations.html>
 - systemd `sysusers.d` `m` directive + `systemd.preset` — <https://www.freedesktop.org/software/systemd/man/latest/systemd.preset.html>
 - Arch `linux-lts 6.18.59-1` patch 0001 (`kernel.unprivileged_userns_clone`) — <https://gitlab.archlinux.org/archlinux/packaging/packages/linux-lts/-/raw/6.18.59-1/0001-add-sysctl-to-allow-disabling-unprivileged-CLONE_NEW.patch>
+- Hyprland 0.57 Lua API (`hl.config`, `hl.bind`, `hl.dsp`, `hl.env`, `hl.on`, `require()` module paths) — <https://wiki.hypr.land/configuring/core/> , <https://wiki.hypr.land/configuring/core/binds/> , <https://wiki.hypr.land/configuring/core/environment-variables/>
+- Hyprland official 0.57 Lua example config — <https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua>
+- hyprpaper `wallpaper { }` blocks, hyprlock colour/widget syntax, hypridle 0.57 Lua DPMS dispatcher — <https://wiki.hypr.land/hypr-ecosystem/user/hyprpaper/> , <https://github.com/hyprwm/hyprlock/blob/main/assets/example.conf> , <https://wiki.hypr.land/hypr-ecosystem/user/hypridle/>
+- SDDM 0.21.0-7 Qt6 greeter, `xorg-server` hard dependency, `sddm.conf(5)` `[Theme] Current=`, QML component property names — <https://archlinux.org/packages/extra/x86_64/sddm/> , <https://github.com/sddm/sddm/tree/develop/components/2.0>
+- Qt5/Qt6 single-platform-theme trick `QT_QPA_PLATFORMTHEME=qt5ct:qt6ct` — <https://wiki.archlinux.org/title/Qt>
+- GTK4/libadwaita `@define-color` overrides and `GTK_THEME` — <https://wiki.archlinux.org/title/GTK>
 - Calamares migration to Codeberg / 3.3.14 archived GitHub mirror — <https://en.wikipedia.org/wiki/Calamares_(software)> , <https://9to5linux.com/calamares-3-4-3-linux-graphical-installer-improves-disk-partitioning-locale>

@@ -12,7 +12,8 @@
 #      the local [ar0x] repo path and dropping the [ar0x] repo block when that
 #      repo database does not exist yet (Phase 3 has no HARD-pinned packages).
 #   4. Overlays config/system/** -> <stage>/airootfs/etc/** (1:1 rule,
-#      BUILD_LAYOUT.md §4) and config/desktop/skel/** -> /etc/skel/**.
+#      BUILD_LAYOUT.md §4), config/desktop/skel/** -> /etc/skel/** and
+#      config/desktop/etc/** -> /etc/** (Phase 6).
 #   5. Runs mkarchiso as root with a fixed SOURCE_DATE_EPOCH derived from the
 #      frozen snapshot date, producing:
 #        /opt/ar0x-build/work/x86_64/airootfs        (the chroot-able base root)
@@ -289,6 +290,10 @@ stage_profile() {
     # .gitkeep exists) and become active in Phases 5/6/7/10 without edits here.
     overlay "${AR0X_CONFIG_DIR}/system" "${STAGE}/airootfs/etc"
     overlay "${AR0X_CONFIG_DIR}/desktop/skel" "${STAGE}/airootfs/etc/skel"
+    # Phase 6 system-wide desktop drop-ins (/etc/sddm.conf.d, /etc/environment.d,
+    # /etc/xdg). Kept separate from config/system/** so Phase 5's 1:1 inventory
+    # stays the single owner of core-system files.
+    overlay "${AR0X_CONFIG_DIR}/desktop/etc" "${STAGE}/airootfs/etc"
     overlay "${AR0X_ASSETS_DIR}/plymouth/ar0x" "${STAGE}/airootfs/usr/share/plymouth/themes/ar0x"
     # ⚠️ NOT /boot: mkarchiso::_cleanup_pacstrap_dir deletes everything under
     # <airootfs>/boot before squashing. GRUB theme art lives in /usr/share here

@@ -1,0 +1,10 @@
+# /etc/skel/.config/mimeapps.list
+# Only association targets that are GUARANTEED present in
+# config/packages.x86_64. Phase 8's ar0x-welcome adds URL scheme handlers.
+[Default Applications]
+inode/directory=thunar.desktop
+text/plain=nvim.desktop
+
+[Added Associations]
+inode/directory=thunar.desktop;
+text/plain=nvim.desktop;

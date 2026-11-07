@@ -15,7 +15,8 @@
 # This is the PHASE 3 BASE set only. Later phases APPEND their own sections:
 #   Phase 4 : plymouth (ADDED), GRUB/Plymouth/syslinux themes
 #   Phase 5 : tzdata, rtkit + 23 config/system/** drop-ins (apparmor already present)
-#   Phase 6 : hyprland, waybar, sddm, gtk3/gtk4, qt6, fonts, icons, wallpapers
+#   Phase 6 : 37 packages — Hyprland Lua stack, SDDM Qt6 theme, GTK3/GTK4,
+#             Qt5/Qt6, icons/cursors/fonts, wallpapers, /etc/skel dotfiles
 #   Phase 8 : ar0x-welcome ar0x-update ar0x-info ar0x-theme ar0x-meta ...
 #   Phase 10: calamares 3.4.3 (from the [ar0x] repo, ADR-017)
 # Phase 11 rebuilds the ISO from the accumulated list. Phase 3's own build is
@@ -111,3 +112,46 @@ wget
 rsync
 jq
 tmux
+
+# --- Phase 6: Wayland desktop (Hyprland 0.57 + SDDM 0.21) -------------------
+# HARD pins (hyprland 0.57.1 et al.) resolve from [ar0x] FIRST in
+# config/pacman.conf.build (ADR-017); until Phase 9 builds them, the frozen
+# 2026/11/01 [extra] snapshot supplies 0.57.0-3. Both are Lua-config releases.
+# Only official [core]/[extra] packages are named here — NO AUR (RISK-004).
+hyprland
+hyprpaper
+hyprlock
+hypridle
+waybar
+sddm
+xorg-xwayland
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+qt5-wayland
+qt6-wayland
+qt5ct
+qt6ct
+gtk3
+gtk4
+libadwaita
+papirus-icon-theme
+adwaita-icon-theme
+adwaita-cursors
+inter-font
+ttf-jetbrains-mono-nerd
+noto-fonts
+noto-fonts-emoji
+kitty
+wofi
+mako
+thunar
+gvfs
+grim
+slurp
+wl-clipboard
+brightnessctl
+playerctl
+network-manager-applet
+polkit-gnome
+xdg-user-dirs
+fastfetch

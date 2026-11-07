@@ -1,0 +1,102 @@
+// /etc/skel/.config/waybar/config.jsonc
+// Waybar 0.15.0. Comments are allowed (JSONC); --check strips them and parses
+// the result as strict JSON, so a stray comma FAILS the build.
+// Every module used here is built into Arch's waybar package; no external
+// custom/* command is referenced except where the binary is in packages.x86_64.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 32,
+  "spacing": 4,
+  "exclusive": true,
+  "passthrough": false,
+  "reload_style_on_change": true,
+
+  "modules-left":   ["hyprland/workspaces", "hyprland/mode"],
+  "modules-center": ["hyprland/window"],
+  "modules-right":  ["network", "pulseaudio", "cpu", "memory",
+                     "backlight", "battery", "clock", "idle_inhibitor", "tray"],
+
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": {
+      "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
+      "6": "6", "7": "7", "8": "8", "9": "9", "10": "0",
+      "urgent": "!", "default": "-"
+    },
+    "persistent-workspaces": { "1": [], "2": [], "3": [] },
+    "on-click": "activate",
+    "all-outputs": false,
+    "show-special": false
+  },
+
+  "hyprland/mode": {
+    "format": "<span style=\"italic\">{}</span>"
+  },
+
+  "hyprland/window": {
+    "format": "{class}  {title}",
+    "max-length": 90,
+    "separate-outputs": false
+  },
+
+  "network": {
+    "format-wifi": "{icon} {essid}",
+    "format-ethernet": "{icon} {ifname}",
+    "format-disconnected": "disconnected",
+    "format-icons": ["○", "◔", "◑", "●"],
+    "tooltip-format": "{ifname} :: {ipaddr}",
+    "interval": 5
+  },
+
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-muted": "muted",
+    "format-icons": { "default": ["○", "◔", "●"] },
+    "scroll-step": 5,
+    "max-volume": 100,
+    "tooltip-format": "{desc} :: {volume}%"
+  },
+
+  "cpu": {
+    "format": "{usage}%",
+    "interval": 5
+  },
+
+  "memory": {
+    "format": "{percentage}%",
+    "interval": 10
+  },
+
+  "backlight": {
+    "format": "{percent}%",
+    "format-icons": ["○", "◔", "◑", "●"],
+    "scroll-step": 5
+  },
+
+  "battery": {
+    "format": "{icon} {capacity}%",
+    "format-icons": ["○", "◔", "◑", "◕", "●"],
+    "format-charging": "{icon} {capacity}% +",
+    "format-full": "{icon} 100%",
+    "states": { "warning": 25, "critical": 10 },
+    "interval": 30
+  },
+
+  "clock": {
+    "format": "{:%H:%M}",
+    "format-alt": "{:%a %d %b %Y  %H:%M}",
+    "tooltip-format": "<big>{:%Y-%m-%d %H:%M:%S %Z}</big>",
+    "interval": 1
+  },
+
+  "idle_inhibitor": {
+    "format": "{icon}",
+    "format-icons": { "activated": "●", "deactivated": "○" }
+  },
+
+  "tray": {
+    "spacing": 8,
+    "icon-size": 18
+  }
+}
