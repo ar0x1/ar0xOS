@@ -1,0 +1,7 @@
+# /home/user/ar0xOS/config/repo/pacman.conf.ar0x-entry
+# PHASE 5 — snippet appended to a user's /etc/pacman.conf in Phase 9
+# (`tools/setup-repo.sh`) and to Calamares' target config in Phase 10.
+# Keep it byte-identical to the [ar0x] block in config/pacman.conf.installed.
+[ar0x]
+SigLevel = Required
+Server = https://repo.ar0x.dev/$arch

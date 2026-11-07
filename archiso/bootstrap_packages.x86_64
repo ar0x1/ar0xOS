@@ -1,0 +1,17 @@
+# /home/user/ar0xOS/config/bootstrap_packages.x86_64
+# -----------------------------------------------------------------------------
+# PHASE 3 — package list for archiso 92's `bootstrap` buildmode.
+#
+# `buildmodes=('bootstrap' 'iso')` in profiledef.sh makes mkarchiso emit BOTH:
+#   * a minimal compressed root tarball at
+#     /opt/ar0x-build/out/ar0x-bootstrap-0.1.0-x86_64.tar.zst
+#   * a bootable live ISO (from packages.x86_64)
+#
+# archiso 92 REQUIRES this file to exist and be non-empty when the bootstrap
+# buildmode is enabled (mkarchiso::_validate_requirements_buildmode_bootstrap).
+# It is deliberately tiny: this tarball is a recovery/CI base root, NOT the
+# live desktop. Upstream releng uses exactly `base` + `arch-install-scripts`.
+# -----------------------------------------------------------------------------
+
+base
+arch-install-scripts

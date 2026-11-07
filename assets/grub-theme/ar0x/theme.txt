@@ -1,0 +1,89 @@
+# /home/user/ar0xOS/assets/grub-theme/ar0x/theme.txt
+# GRUB 2 gfxmenu theme for ar0x 0.1.0 "Neon Root" (Phase 4).
+#
+# Installed at TWO target paths (both are needed):
+#   ISO      : /boot/grub/themes/ar0x/theme.txt  — archiso 92 copies every
+#              non-*.cfg file from <profile>/grub/ to <ISO>/boot/grub/
+#              (mkarchiso::_make_bootmode_uefi.grub, `files_to_copy`).
+#   Installed: /usr/share/grub/themes/ar0x/theme.txt — used by grub-mkconfig
+#              via GRUB_THEME in config/default/grub.
+#
+# ⚠️ NO *-font keys on purpose. archiso 92 runs
+#    grub-mkstandalone --themes="" and embeds NO font in the EFI binary; adding
+#    a named font here would make gfxmenu fall back unpredictably. GRUB's
+#    built-in font is used. Phase 7 may add ar0x.pf2 + a loadfont line.
+#
+# Palette (ADR-015, config/versions.env):
+#   void #07090F | surface #11151F | cyan #00E5FF | magenta #FF2E88
+#   text #D7E0EE | muted #6B7891
+
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#07090F"
+
+terminal-left: "8%"
+terminal-top: "12%"
+terminal-width: "84%"
+terminal-height: "76%"
+terminal-border: "0"
+
+# Header wordmark
++ label {
+    top = 14%
+    left = 0
+    width = 100%
+    height = 30
+    text = "ar0x 0.1.0  //  NEON ROOT"
+    align = "center"
+    color = "#00E5FF"
+}
+
+# Sub-header
++ label {
+    top = 20%
+    left = 0
+    width = 100%
+    height = 20
+    text = "Developer Edition  -  x86_64  -  linux-lts 6.18.59"
+    align = "center"
+    color = "#6B7891"
+}
+
+# Main boot selector
++ boot_menu {
+    left = 18%
+    top = 30%
+    width = 64%
+    height = 40%
+    item_color = "#D7E0EE"
+    selected_item_color = "#00E5FF"
+    item_height = 34
+    item_padding = 6
+    item_spacing = 8
+    scrollbar = false
+}
+
+# Countdown bar (id __timeout__ is required by GRUB)
++ progress_bar {
+    id = "__timeout__"
+    left = 18%
+    top = 78%
+    width = 64%
+    height = 6
+    show_text = false
+    fg_color = "#00E5FF"
+    bg_color = "#11151F"
+    border_color = "#FF2E88"
+    highlight_overlay = true
+}
+
+# Footer hint
++ label {
+    top = 84%
+    left = 0
+    width = 100%
+    height = 20
+    text = "ENTER boot   |   E edit   |   C GRUB shell"
+    align = "center"
+    color = "#6B7891"
+}

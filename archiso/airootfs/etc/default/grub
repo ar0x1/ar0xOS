@@ -1,0 +1,27 @@
+# /etc/default/grub   (target path inside the live AND installed system)
+# -----------------------------------------------------------------------------
+# PHASE 4 — GRUB defaults. Calamares (Phase 10) runs `grub-mkconfig` on the
+# TARGET disk; this file is what it reads. archiso's ISO grub.cfg is separate
+# (archiso/grub/grub.cfg) and uses %ARCHISO_*% template identifiers.
+# -----------------------------------------------------------------------------
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=10
+GRUB_TIMEOUT_STYLE=menu
+GRUB_DISTRIBUTOR="ar0x"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 vt.global_cursor_default=0 apparmor=1 security=apparmor"
+GRUB_CMDLINE_LINUX=""
+
+# ar0x GRUB theme. On the installed system it lives in /usr/share/grub/themes/.
+GRUB_THEME="/usr/share/grub/themes/ar0x/theme.txt"
+GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GRUB_TERMINAL_INPUT=console
+
+# Cyberpunk palette (cyan on near-black). Phase 7 publishes the exact hex values.
+GRUB_COLOR_NORMAL="light-cyan/black"
+GRUB_COLOR_HIGHLIGHT="cyan/black"
+
+# Let grub-mkconfig detect other OSes on multi-boot developer machines.
+# ⚠️ os-prober mounts foreign filesystems read-only; disable it on kiosk builds.
+GRUB_DISABLE_OS_PROBER=false
+GRUB_DISABLE_RECOVERY=false

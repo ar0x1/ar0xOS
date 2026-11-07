@@ -1,0 +1,19 @@
+# /etc/systemd/system-preset/50-ar0x.preset — applied by `systemctl preset-all`.
+# One owner of service state: everything enabled/disabled for ar0x lives here.
+enable NetworkManager.service
+enable NetworkManager-wait-online.service
+enable nftables.service
+enable apparmor.service
+enable bluetooth.service
+enable systemd-timesyncd.service
+enable systemd-userdbd.service
+enable plymouth-quit-wait.service
+
+# ⚠️ Two DHCP clients fighting over one link is a classic broken-network bug.
+disable systemd-networkd.service
+disable systemd-networkd-wait-online.service
+disable dhcpcd.service
+disable dhcpcd@.service
+disable iptables.service
+disable ip6tables.service
+disable NetworkManager-dispatcher.service

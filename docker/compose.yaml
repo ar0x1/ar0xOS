@@ -1,0 +1,45 @@
+# /home/user/ar0xOS/docker/compose.yaml
+# -----------------------------------------------------------------------------
+# Phase 2 — Docker Compose definition for the ar0x build container.
+# Run from the repository root:
+#   docker compose -f docker/compose.yaml build
+#   docker compose -f docker/compose.yaml run --rm ar0x-builder ./tools/setup-build-env.sh --check
+#   ./docker/run.sh --check
+#
+# ⚠️ RISK-016: `privileged: true` is REQUIRED. mkarchiso performs mount --bind,
+# mknod, chroot and mkfs.* — none of which work in a rootless/unprivileged
+# container. Only bind-mounts the checkout and the build root; NO Docker socket,
+# NO host /, NO SSH agent. Use locally with trusted code only.
+# -----------------------------------------------------------------------------
+
+services:
+  ar0x-builder:
+    image: ar0x-builder:0.1.0
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    privileged: true
+    # Explicit even though `privileged` already grants them: documents intent.
+    cap_add:
+      - SYS_ADMIN
+      - MKNOD
+    security_opt:
+      - seccomp=unconfined
+    devices:
+      - /dev/loop-control:/dev/loop-control
+      - /dev/fuse:/dev/fuse
+    volumes:
+      # Repository checkout (compose resolves `..` relative to docker/).
+      - ..:/ar0xOS
+      # Host build root at the SAME path inside the container, so paths in
+      # PROJECT_PLAN.md / config/versions.env stay valid and the final ISO
+      # lands on the host at /opt/ar0x-build/out/.
+      - ${AR0X_HOST_BUILD_ROOT:-/opt/ar0x-build}:/opt/ar0x-build
+    environment:
+      AR0X_SOURCE_ROOT: /ar0xOS
+      AR0X_BUILD_ROOT: /opt/ar0x-build
+      AR0X_VERSION: 0.1.0
+    working_dir: /ar0xOS
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]

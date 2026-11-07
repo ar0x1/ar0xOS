@@ -1,0 +1,113 @@
+# /home/user/ar0xOS/config/packages.x86_64
+# -----------------------------------------------------------------------------
+# PHASE 3 — canonical ar0x package list for the archiso 92 `iso` buildmode.
+# One package (or package group) per line. Lines starting with # and blank
+# lines are ignored; inline trailing comments are stripped by mkarchiso.
+#
+# ⚠️ MANDATORY (archiso 92, docs/README.profile.rst): `mkinitcpio` AND
+#    `mkinitcpio-archiso` must be present, or the live initramfs will not boot.
+# ⚠️ MANDATORY (archiso 92, mkarchiso::_validate_requirements_bootmode_bios.syslinux):
+#    `syslinux` must be IN THIS LIST, not only installed on the host — mkarchiso
+#    copies isolinux.bin / *.c32 out of the *airootfs*, not the host.
+# ⚠️ `grub` is needed in the airootfs so Calamares (Phase 10) can install GRUB
+#    onto the target disk from the live system's own package files.
+#
+# This is the PHASE 3 BASE set only. Later phases APPEND their own sections:
+#   Phase 4 : plymouth (ADDED), GRUB/Plymouth/syslinux themes
+#   Phase 5 : tzdata, rtkit + 23 config/system/** drop-ins (apparmor already present)
+#   Phase 6 : hyprland, waybar, sddm, gtk3/gtk4, qt6, fonts, icons, wallpapers
+#   Phase 8 : ar0x-welcome ar0x-update ar0x-info ar0x-theme ar0x-meta ...
+#   Phase 10: calamares 3.4.3 (from the [ar0x] repo, ADR-017)
+# Phase 11 rebuilds the ISO from the accumulated list. Phase 3's own build is
+# a BASE BOOTSTRAP SMOKE TEST, not the final release ISO.
+# -----------------------------------------------------------------------------
+
+# --- Base system -------------------------------------------------------------
+base
+arch-install-scripts
+linux-lts
+linux-lts-headers
+linux-firmware
+intel-ucode
+amd-ucode
+wireless-regdb
+sof-firmware
+
+# --- Live initramfs (MANDATORY for archiso) ----------------------------------
+mkinitcpio
+mkinitcpio-archiso
+
+# --- Bootloaders / disk utilities (must exist inside the airootfs) -----------
+plymouth
+grub
+syslinux
+edk2-shell
+efibootmgr
+dosfstools
+mtools
+e2fsprogs
+btrfs-progs
+xfsprogs
+f2fs-tools
+exfatprogs
+gptfdisk
+parted
+cryptsetup
+lvm2
+squashfs-tools
+
+# --- Core userspace / init ---------------------------------------------------
+# Phase 5 additions: tzdata (locale/timezone) + rtkit (PipeWire realtime
+# scheduling). apparmor, nftables, sudo and polkit were already in the Phase 3
+# base set — do NOT add them twice.
+tzdata
+rtkit
+sudo
+polkit
+networkmanager
+nftables
+apparmor
+dbus
+gnupg
+openssh
+pacman-contrib
+reflector
+
+# --- Audio (PipeWire stack; config/ arrives in Phase 5) ---------------------
+pipewire
+pipewire-pulse
+pipewire-alsa
+pipewire-jack
+wireplumber
+alsa-utils
+bluez
+bluez-utils
+
+# --- Graphics baseline (full DE stack arrives in Phase 6) -------------------
+mesa
+vulkan-icd-loader
+
+# --- Networking / firmware tools ---------------------------------------------
+iw
+wpa_supplicant
+ethtool
+usbutils
+pciutils
+
+# --- Developer baseline (audience = Developers) -----------------------------
+git
+base-devel
+neovim
+zsh
+zsh-completions
+starship
+bash-completion
+man-db
+man-pages
+less
+which
+curl
+wget
+rsync
+jq
+tmux

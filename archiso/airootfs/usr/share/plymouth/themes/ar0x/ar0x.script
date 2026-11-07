@@ -1,0 +1,48 @@
+# /home/user/ar0xOS/assets/plymouth/ar0x/ar0x.script
+# Target: /usr/share/plymouth/themes/ar0x/ar0x.script
+# -----------------------------------------------------------------------------
+# PHASE 4 — Plymouth script-plugin splash.
+#
+# Palette (ADR-015): void #07090F -> (0.027,0.035,0.059),
+#                    surface #11151F -> (0.067,0.082,0.122).
+# Images are generated deterministically by tools/gen-theme-assets.sh:
+#   logo.png          320x80   "ar0x" cyan wordmark + magenta underline
+#   progress-0..20   400x6    20-segment boot progress bar
+#
+# ⚠️ LIMITATION: this script has NO message renderer (no label plugin in the
+#    initramfs). Boot-time prompts such as a LUKS passphrase fall back to the
+#    `details` text theme. v0.1 ships unencrypted ext4 by default (Phase 10),
+#    so this is acceptable. For LUKS, use:
+#      plymouth-set-default-theme -R details
+#    or boot the "failsafe" GRUB entry. Phase 7 adds the final branded art.
+# -----------------------------------------------------------------------------
+
+Window.SetBackgroundTopColor (0.027, 0.035, 0.059);
+Window.SetBackgroundBottomColor (0.067, 0.082, 0.122);
+
+# --- Wordmark ----------------------------------------------------------------
+logo_image = Image("logo.png");
+logo_sprite = Sprite(logo_image);
+logo_sprite.SetX(Window.GetWidth() / 2 - logo_image.GetWidth() / 2);
+logo_sprite.SetY(Window.GetHeight() / 2 - logo_image.GetHeight() / 2 - 40);
+
+# --- Progress bar: 21 pre-rendered frames ------------------------------------
+for (i = 0; i <= 20; i++)
+  {
+    progress_image[i] = Image("progress-" + i + ".png");
+  }
+
+progress_sprite = Sprite(progress_image[0]);
+progress_sprite.SetX(Window.GetWidth() / 2 - progress_image[0].GetWidth() / 2);
+progress_sprite.SetY(Window.GetHeight() / 2 + 40);
+
+# Plymouth calls this with (duration, progress) where progress is 0.0 .. 1.0.
+fun boot_progress_callback (duration, progress)
+  {
+    index = Math.Int(progress * 20);
+    if (index < 0) index = 0;
+    if (index > 20) index = 20;
+    progress_sprite.SetImage(progress_image[index]);
+  }
+
+Plymouth.SetBootProgressFunction(boot_progress_callback);

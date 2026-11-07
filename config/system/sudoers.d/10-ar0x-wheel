@@ -1,0 +1,11 @@
+# /etc/sudoers.d/10-ar0x-wheel — ar0x v0.1 (must be mode 0440, root:root).
+# Verified with `visudo -cf /etc/sudoers.d/10-ar0x-wheel`.
+%wheel ALL=(ALL:ALL) ALL
+
+# Developer workstation defaults. `!tty_tickets` gives one timestamp for the
+# whole session instead of per-TTY, so a terminal split in Hyprland does not
+# re-prompt. `timestamp_timeout=15` bounds the privilege window.
+Defaults !tty_tickets
+Defaults timestamp_timeout=15
+Defaults lecture=never
+Defaults env_reset

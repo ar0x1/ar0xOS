@@ -1,0 +1,78 @@
+# /home/user/ar0xOS/.gitignore
+# -----------------------------------------------------------------------------
+# Phase 1 — keep generated artifacts, large datasets and secrets OUT of Git.
+# The SOURCE ROOT stays small; the BUILD ROOT (/opt/ar0x-build) is never here.
+# NOTE: gitignore supports comments only on their own line, never inline.
+# -----------------------------------------------------------------------------
+
+# --- Build output & scratch --------------------------------------------------
+/build/
+/work/
+/out/
+/repo/x86_64/*
+!/repo/x86_64/.gitkeep
+/archiso/work/
+/archiso/out/
+/archiso/airootfs/boot/vmlinuz*
+/archiso/airootfs/boot/initramfs*
+/archiso/airootfs/boot/*.img
+
+# --- ISO / squashfs / package artifacts --------------------------------------
+*.iso
+*.sfs
+*.squashfs
+*.img
+*.pkg.tar.zst
+*.pkg.tar.zst.sig
+*.db.tar.*
+*.files.tar.*
+SHA256SUMS
+SHA256SUMS.sig
+packages.lock
+
+# Keep intentional artwork (negations must come after broad patterns)
+!assets/**/*.png
+!assets/**/*.jpg
+!assets/**/*.svg
+
+# --- Signing keys / secrets (NEVER commit) -----------------------------------
+*.gpg
+*.asc
+*.key
+*.pem
+/keys/
+secrets/
+.env
+.env.*
+
+# --- archiso profile files ARE tracked (bootstrap.sh --sync keeps pacman.conf /
+#     packages.x86_64 / bootstrap_packages.x86_64 in sync with config/).
+#     Only mkarchiso's own scratch output is ignored (see above). ---------------
+
+# --- Python / node / editor / OS noise ---------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Vagrant / VM scratch ---------------------------------------------------
+.vagrant/
+*.qcow2
+*.vdi
+*.vmdk
+
+# --- Logs & caches -----------------------------------------------------------
+*.log
+.cache/
+.shellcheck_cache/
+
+# --- Keep intentional empty directories --------------------------------------
+!.gitkeep
+!**/.gitkeep

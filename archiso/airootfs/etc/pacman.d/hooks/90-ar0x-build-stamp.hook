@@ -1,0 +1,20 @@
+# /etc/pacman.d/hooks/90-ar0x-build-stamp.hook  (target path in the live system)
+# -----------------------------------------------------------------------------
+# archiso 92 sets HookDir to <airootfs>/etc/pacman.d/hooks/, so hooks here run
+# during pacstrap. `customize_airootfs.sh` is DEPRECATED in archiso 92
+# (mkarchiso::_make_customize_airootfs emits a warning) — use hooks instead.
+#
+# This hook writes an immutable build stamp after every package transaction.
+# It is intentionally tiny and side-effect-safe (idempotent, no network, no
+# chroot escape). Phases 5-10 add their own hooks/units here.
+# -----------------------------------------------------------------------------
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = *
+
+[Action]
+Description = Stamping ar0x build metadata...
+When = PostTransaction
+Exec = /usr/bin/sh -c 'printf "ar0x 0.1.0 | snapshot 2026/11/01 | linux-lts 6.18.59-1\n" > /etc/ar0x-build-stamp'

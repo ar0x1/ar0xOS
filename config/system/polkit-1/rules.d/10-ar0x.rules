@@ -1,0 +1,16 @@
+// /etc/polkit-1/rules.d/10-ar0x.rules — polkit JavaScript rules (systemd 262).
+// Developers in `wheel` may manage NetworkManager connections and mount
+// removable media without a second GUI password prompt. Everything else
+// (poweroff as another user, systemd unit editing) still requires auth.
+polkit.addRule(function(action, subject) {
+    if (subject.isInGroup("wheel")) {
+        if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0) {
+            return polkit.Result.YES;
+        }
+        if (action.id === "org.freedesktop.udisks2.filesystem-mount" ||
+            action.id === "org.freedesktop.udisks2.eject-media" ||
+            action.id === "org.freedesktop.udisks2.power-off-drive") {
+            return polkit.Result.YES;
+        }
+    }
+});
