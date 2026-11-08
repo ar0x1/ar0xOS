@@ -27,7 +27,7 @@ DRIVER_NEEDLES = (
     "setup-repo.sh --verify", "build-iso.sh --build",
     "checksum.sh --sign", "checksum.sh --verify", "2362232012",
     "NEVER tags", "NEVER uploads", "validate-versions.sh",
-    "gpg --verify", "gpg --list-secret-keys", "require_root",
+    "gpg --verify", "gpg --list-secret-keys", "require_root", "GNUPGHOME",
     "RISK-053", "RISK-054", "RISK-004", "--self-test", "--preflight",
 )
 # A publication command in the driver would be an accidental release (RISK-054).
@@ -85,6 +85,9 @@ def check_staging(root):
         assert needle in i, "build-iso.sh missing %r" % needle
     assert "--stage" in i and "bootstrap.sh --sync\n    mkdir -p" not in i, \
         "build-iso.sh --build must really stage the mkarchiso profile (ADR-029)"
+    c = read(root / "tools/checksum.sh")
+    assert "GNUPGHOME" in c, \
+        "checksum.sh --sign must point gpg at the offline keyring (AR0X_KEYS_DIR/gnupg)"
     ok("ADR-029: bootstrap.sh --stage + staged-only signed-package injection; --build uses the stage")
 
 
@@ -136,7 +139,7 @@ def run_checks(root):
 NEEDED = (
     "tools/build-release.sh", "tools/bootstrap.sh", "tools/build-iso.sh",
     "docs/BUILD_RELEASE_ISO.md", "README.md", "ci/workflows/build-iso.yml",
-    "config/packages.x86_64", "archiso/packages.x86_64",
+    "config/packages.x86_64", "archiso/packages.x86_64", "tools/checksum.sh",
 )
 
 
@@ -208,6 +211,9 @@ def self_test(root):
                  _edit("ci/workflows/build-iso.yml",
                        "github.repository == 'ar0x1/ar0xOS'", "true"),
                  "github.repository")
+    _expect_fail("checksum.sh lost the offline GNUPGHOME keyring", root,
+                 _edit("tools/checksum.sh", "GNUPGHOME", "HOME"),
+                 "offline keyring")
 
     print("[ OK ] post-plan ISO build chain offline self-test PASSED")
     return 0

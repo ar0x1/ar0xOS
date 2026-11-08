@@ -294,7 +294,7 @@ sirf **commands print** karta hai, upload nahi.
 |---|---|
 | `PENDING-KEYGEN` / `--run` refuse | Step 0 dobara karo; FPR 40-hex hona chahiye |
 | `makepkg refuses root` | `--build` normal user se chalao, `sudo` hatao |
-| `gpg` key nahi mila | `GNUPGHOME=/opt/ar0x-build/keys/gnupg` owner check karo |
+| `gpg` key nahi mila | `--run` apne aap `GNUPGHOME=/opt/ar0x-build/keys/gnupg` set karta hai; agar aap `--sign` alag se chala rahe ho to khud `export GNUPGHOME=/opt/ar0x-build/keys/gnupg` karo, aur keys dir ka owner check karo |
 | `[ar0x] db missing` | `setup-repo.sh --sign` + `--verify` chalao |
 | ISO > `2362232012` bytes | `PROJECT_PLAN.md §7` ke size lever order lagao |
 | QEMU nahi chalta | `qemu-desktop` + `edk2-ovmf` install karo, `/dev/kvm` check karo |

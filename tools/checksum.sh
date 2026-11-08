@@ -138,6 +138,8 @@ do_sign() {
     [[ "$fpr" != "PENDING-KEYGEN" && "$fpr" =~ ^[0-9A-Fa-f]{40}$ ]] \
         || die "RISK-051: no valid release fingerprint (found '${fpr}'); run the air-gapped --keygen first."
     have_command gpg || die "gpg is required for --sign (unavailable in this sandbox)."
+    # The offline master key is NOT in the invoking user's default ~/.gnupg.
+    export GNUPGHOME="${GNUPGHOME:-${AR0X_KEYS_DIR}/gnupg}"
     [[ -f "${OUT}/${SUMS}" ]] || die "run --create first."
     [[ -f "${OUT}/${ISO}" ]]  || die "ISO not found: ${OUT}/${ISO}."
     gpg --batch --yes --armor --detach-sign --local-user "$fpr" \
