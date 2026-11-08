@@ -74,7 +74,7 @@ gate_state() {
 
 do_plan() {
     section "Real-host ISO build chain (PRINT ONLY — nothing is executed)"
-    printf '  0. MANUAL (air-gapped): sudo AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen\n'
+    printf '  0. MANUAL (air-gapped, NON-ROOT): AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen\n'
     printf '     commit the 40-hex FPR, publish it OUT OF BAND, then --sync/--build/--sign/--verify\n'
     printf '  1. ./tools/validate-versions.sh\n'
     printf '  2. ./tools/setup-repo.sh --verify "$AR0X_REPO_DIR"\n'

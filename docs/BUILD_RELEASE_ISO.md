@@ -77,15 +77,23 @@ An offline release key cannot be generated in CI or in this sandbox (RISK-051).
 On an **air-gapped** machine with `gnupg` installed:
 
 ```bash
-sudo AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen
+sudo mkdir -p /opt/ar0x-build/{work,out,repo/x86_64,keys,logs,cache/pacman/pkg,src}
+sudo chown -R "$USER":"$USER" /opt/ar0x-build
+
+AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen   # NON-ROOT, air-gapped
 # commit ONLY the resulting 40-hex fingerprint in
 #   config/repo/RELEASE_KEY_FINGERPRINT
 # publish that fingerprint OUT OF BAND (README.md + website + keyserver)
 ./tools/setup-repo.sh --sync
-sudo -u builder ./tools/setup-repo.sh --build      # 8 packages, never as root
-AR0X_CONFIRM_SIGN=yes ./tools/setup-repo.sh --sign
-./tools/setup-repo.sh --verify "$AR0X_REPO_DIR"
+AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build    # makepkg REFUSES root
+AR0X_CONFIRM_SIGN=yes  ./tools/setup-repo.sh --sign
+./tools/setup-repo.sh --verify /opt/ar0x-build/repo/x86_64
 ```
+
+`--keygen`, `--build` and `--sign` must run as the SAME normal user that owns
+`/opt/ar0x-build/keys/gnupg`; otherwise `gpg` cannot read the offline key. If
+you did run `--keygen` with `sudo`, `chown -R` the keys directory back first.
+Only `--run` below needs root (`mkarchiso`).
 
 Then place the signed `ar0x.db.tar.zst` + `.sig` (and all signed packages) at
 `${AR0X_REPO_DIR}` (default `/opt/ar0x-build/repo/x86_64`), and make the
