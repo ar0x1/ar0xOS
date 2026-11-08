@@ -1,0 +1,19 @@
+# /home/user/ar0xOS/assets/plymouth/ar0x/ar0x.plymouth
+# Target: /usr/share/plymouth/themes/ar0x/ar0x.plymouth
+# -----------------------------------------------------------------------------
+# PHASE 4 created the descriptor; PHASE 7 replaced the placeholder art.
+# ModuleName=script uses plymouth's script plugin (no compiled plugin needed).
+# ImageDir/ScriptFile are absolute because the theme is embedded in the
+# initramfs by the mkinitcpio `plymouth` hook.
+# Art contract: logo.png is the OFFICIAL 512 logomark + wordmark lockup drawn
+# by tools/gen-theme-assets.sh from tools/lib/ar0x_logo.py; progress-0..20
+# are the 20-segment cyan/magenta boot bar. No font files, no external tools.
+# -----------------------------------------------------------------------------
+[Plymouth Theme]
+Name=ar0x
+Description=ar0x 0.1.0 "ar0x root" official boot splash (Phase 7)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ar0x
+ScriptFile=/usr/share/plymouth/themes/ar0x/ar0x.script

@@ -1,0 +1,22 @@
+# /usr/lib/systemd/user/ar0x-welcome.service
+# -----------------------------------------------------------------------------
+# PHASE 8 — USER unit, enabled globally by ar0x-welcome.install (and re-armed
+# by /usr/lib/ar0x/ar0x-firstboot). Runs once per new account on the first
+# graphical session; ar0x-welcome writes ~/.config/ar0x/welcome-done on close
+# so the ExecCondition skips it forever afterwards.
+#
+# Why a USER unit: a system unit cannot open a Wayland window. It must run in
+# the user's graphical-session.target where WAYLAND_DISPLAY / DISPLAY exist.
+# -----------------------------------------------------------------------------
+[Unit]
+Description=ar0x Welcome (first login only)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecCondition=/bin/sh -c 'test ! -f "${XDG_CONFIG_HOME:-$HOME/.config}/ar0x/welcome-done"'
+ExecStart=/usr/bin/ar0x-welcome --firstboot
+
+[Install]
+WantedBy=graphical-session.target

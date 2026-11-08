@@ -1,0 +1,54 @@
+# /etc/skel/.config/starship.toml
+# Cyberpunk prompt. Palette from config/versions.env (ADR-015).
+format = """
+[╭─](bold #00E5FF)$username$hostname$directory$git_branch$git_status$python$nodejs$rust$golang
+[╰─](bold #00E5FF)$character"""
+add_newline = true
+
+[character]
+success_symbol = "[❯](bold #A8FF60)"
+error_symbol = "[❯](bold #FF5C57)"
+
+[username]
+style_user = "bold #00E5FF"
+style_root = "bold #FF2E88"
+format = "[$user]($style) "
+show_always = true
+
+[hostname]
+ssh_only = false
+style = "bold #FF2E88"
+format = "[@$hostname]($style) "
+
+[directory]
+style = "bold #D7E0EE"
+truncation_length = 4
+truncate_to_repo = true
+format = "[$path]($style) "
+
+[git_branch]
+symbol = " "
+style = "bold #A8FF60"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "bold #FF2E88"
+format = "[$all_status$ahead_behind]($style) "
+
+[python]
+style = "bold #00E5FF"
+symbol = " "
+[nodejs]
+style = "bold #A8FF60"
+symbol = " "
+[rust]
+style = "bold #FF2E88"
+symbol = " "
+[golang]
+style = "bold #00E5FF"
+symbol = " "
+
+[cmd_duration]
+min_time = 2000
+style = "bold #6B7891"
+format = "took [$duration]($style) "

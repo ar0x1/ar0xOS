@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ar0x System Info
+GenericName=System Information
+Comment=Branded ar0x system report (fastfetch, or pure-Bash ASCII fallback)
+Exec=/usr/bin/ar0x-info
+Icon=ar0x-logo
+Terminal=true
+StartupNotify=false
+Categories=System;Utility;
+Keywords=ar0x;info;fastfetch;neofetch;

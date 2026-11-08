@@ -1,0 +1,5 @@
+# /etc/hosts — ar0x v0.1 live + installed default.
+# Calamares (Phase 10) rewrites /etc/hostname and /etc/hosts for the target.
+127.0.0.1       localhost
+::1             localhost
+127.0.1.1       ar0x-live.localdomain   ar0x-live

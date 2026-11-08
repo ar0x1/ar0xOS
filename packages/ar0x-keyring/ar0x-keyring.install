@@ -1,0 +1,23 @@
+# /home/user/ar0xOS/packages/ar0x-keyring/ar0x-keyring.install
+# -----------------------------------------------------------------------------
+# pacman INSTALL SCRIPTLET (SOURCED by pacman's shell — deliberately NOT a
+# standalone script: no shebang, no `set -euo pipefail`). Same exemption as
+# packages/ar0x-welcome/ar0x-welcome.install and archiso/profiledef.sh.
+#
+# `pacman-key --populate ar0x` reads /usr/share/pacman/keyrings/ar0x.gpg,
+# ar0x-trusted and ar0x-revoked, imports the public key, locally signs the
+# trusted fingerprints and imports their ownertrust. It works inside a
+# Calamares/pacstrap chroot (no D-Bus required), unlike systemctl --global.
+# -----------------------------------------------------------------------------
+
+_ar0x_populate() {
+    if command -v pacman-key >/dev/null 2>&1 && [[ -d /etc/pacman.d/gnupg ]]; then
+        pacman-key --populate ar0x
+    else
+        printf 'ar0x-keyring: WARNING: pacman keyring not initialised.\n' >&2
+        printf 'ar0x-keyring: after first boot run: sudo pacman-key --init && sudo pacman-key --populate ar0x\n' >&2
+    fi
+}
+
+post_install() { _ar0x_populate; }
+post_upgrade() { _ar0x_populate; }

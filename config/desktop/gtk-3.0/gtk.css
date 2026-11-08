@@ -1,0 +1,75 @@
+/* /etc/skel/.config/gtk-3.0/gtk.css
+ * GTK3 override layer on top of Adwaita-dark. GTK3 loads this file at startup.
+ * NOTE: @define-color here does NOT recolor Adwaita's own rules — the explicit
+ * selectors below do. A full theme engine ships as ar0x-theme in Phase 8.
+ */
+@define-color ar0x_void    #07090F;
+@define-color ar0x_surface #11151F;
+@define-color ar0x_cyan    #00E5FF;
+@define-color ar0x_magenta #FF2E88;
+@define-color ar0x_lime    #A8FF60;
+@define-color ar0x_text    #D7E0EE;
+@define-color ar0x_muted   #6B7891;
+@define-color ar0x_alert   #FF5C57;
+
+window.background,
+.background,
+dialog.background,
+popover.background {
+    background-color: @ar0x_void;
+    color: @ar0x_text;
+}
+
+headerbar,
+.titlebar,
+headerbar.titlebar,
+.titlebar.default-decoration {
+    background-color: @ar0x_surface;
+    color: @ar0x_text;
+    border-bottom: 1px solid @ar0x_muted;
+}
+
+textview text,
+entry,
+textview.view,
+scrolledwindow,
+notebook > stack {
+    background-color: @ar0x_void;
+    color: @ar0x_text;
+}
+
+entry:focus, entry:selected, textview text:selected {
+    border-color: @ar0x_cyan;
+}
+
+button, button.text-button {
+    background-color: @ar0x_surface;
+    color: @ar0x_text;
+    border: 1px solid @ar0x_muted;
+    border-radius: 4px;
+}
+button:hover { border-color: @ar0x_cyan; }
+button:checked, button:active { background-color: @ar0x_cyan; color: @ar0x_void; }
+
+menubar, menu, .menu {
+    background-color: @ar0x_surface;
+    color: @ar0x_text;
+}
+menuitem:hover { background-color: @ar0x_cyan; color: @ar0x_void; }
+
+scrollbar slider {
+    background-color: @ar0x_muted;
+    border-radius: 6px;
+}
+scrollbar slider:hover { background-color: @ar0x_cyan; }
+
+selection, :selected { background-color: @ar0x_cyan; color: @ar0x_void; }
+
+tooltip, tooltip.background {
+    background-color: @ar0x_surface;
+    color: @ar0x_text;
+    border: 1px solid @ar0x_cyan;
+}
+
+switch:checked { background-color: @ar0x_lime; }
+progressbar > trough > progress { background-color: @ar0x_cyan; }

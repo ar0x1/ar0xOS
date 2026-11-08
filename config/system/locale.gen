@@ -1,0 +1,4 @@
+# /etc/locale.gen — only the locales ar0x actually generates.
+# ⚠️ MANUAL: run `locale-gen` (or tools/configure-system.sh --apply) after
+#    changing this file; glibc does not regenerate locales automatically here.
+en_US.UTF-8 UTF-8

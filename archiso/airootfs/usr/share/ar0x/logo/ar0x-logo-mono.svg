@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- /home/user/ar0xOS/assets/logo/ar0x-logo-mono.svg
+     SINGLE-COLOUR logomark for engraving, favicons, 1-bit print and light
+     backgrounds. currentColor inherits CSS `color`; set color:#07090F on light
+     media and color:#D7E0EE on dark media. Same 512x512 geometry as the master. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"
+     role="img" aria-labelledby="ar0x-mono-title">
+  <title id="ar0x-mono-title">ar0x logomark (monochrome)</title>
+  <polygon points="136,24 376,24 488,136 488,376 376,488 136,488 24,376 24,136"
+           fill="none" stroke="currentColor" stroke-width="28" stroke-linejoin="miter"/>
+  <polyline points="150,170 238,256 150,342"
+            fill="none" stroke="currentColor" stroke-width="40"
+            stroke-linecap="butt" stroke-linejoin="miter"/>
+  <line x1="272" y1="342" x2="362" y2="342"
+        stroke="currentColor" stroke-width="40" stroke-linecap="butt" opacity="0.7"/>
+  <rect x="322" y="170" width="48" height="48" fill="currentColor" opacity="0.7"/>
+</svg>

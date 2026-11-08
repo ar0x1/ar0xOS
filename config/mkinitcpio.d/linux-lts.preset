@@ -1,0 +1,20 @@
+# /etc/mkinitcpio.d/linux-lts.preset   (target path inside the system)
+# -----------------------------------------------------------------------------
+# PHASE 4 — mkinitcpio preset for the STOCK linux-lts package.
+#
+# ⚠️ TRADEOFF: PRESETS=('default') ONLY. Arch's shipped preset also builds a
+#    -fallback initramfs (~2x the size, ~40 MB extra). On a ~2 GB ISO with a
+#    live squashfs that is wasteful; the failsafe GRUB/syslinux menu entries
+#    (nomodeset, verbose) are the recovery path instead. Re-add 'fallback' if
+#    you need an initramfs that boots on arbitrary hardware.
+# -----------------------------------------------------------------------------
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+PRESETS=('default')
+
+default_image="/boot/initramfs-linux-lts.img"
+#default_options=""
+
+#fallback_image="/boot/initramfs-linux-lts-fallback.img"
+#fallback_options="-S autodetect"

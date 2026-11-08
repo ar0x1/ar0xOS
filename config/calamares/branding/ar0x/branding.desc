@@ -1,0 +1,48 @@
+# /etc/calamares/branding/ar0x/branding.desc — Phase 10
+# Calamares searches /etc/calamares/branding BEFORE /usr/share/calamares/
+# branding, so this directory (delivered by config/calamares -> bootstrap
+# overlay) is the SINGLE owner of the ar0x installer brand. ADR-024.
+---
+componentName:  ar0x
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:    false
+windowExpanding: normal
+windowSize: 1024px,680px
+windowPlacement: center
+sidebar: widget
+navigation: widget
+
+strings:
+    productName:         ar0x
+    shortProductName:    ar0x
+    version:             0.1.0
+    shortVersion:        0.1.0
+    versionedName:       ar0x 0.1.0 (ar0x root)
+    shortVersionedName:  ar0x 0.1.0
+    bootloaderEntryName: ar0x
+    productUrl:          https://github.com/ar0x1/ar0xOS
+    supportUrl:          https://github.com/ar0x1/ar0xOS/issues
+    knownIssuesUrl:      https://github.com/ar0x1/ar0xOS/issues
+    releaseNotesUrl:     https://github.com/ar0x1/ar0xOS/tree/main/docs
+
+images:
+    productLogo:         "ar0x-logo.png"
+    productIcon:         "ar0x-logo.png"
+    productWelcome:      "ar0x-logo.png"
+
+# ADR-015 / ADR-025: the eight canonical palette pins, verbatim from
+# config/versions.env. ar0x_installer.py asserts byte-parity.
+style:
+    sidebarBackground:    "#07090F"
+    sidebarText:          "#D7E0EE"
+    sidebarTextSelect:    "#00E5FF"
+    sidebarTextHighlight: "#11151F"
+    buttonBackground:     "#11151F"
+    buttonText:           "#D7E0EE"
+    buttonBackgroundHover:"#FF2E88"
+    alertText:            "#FF5C57"
+    successText:          "#A8FF60"
+    mutedText:            "#6B7891"
+
+slideshow:               "show.qml"
+slideshowAPI:            2

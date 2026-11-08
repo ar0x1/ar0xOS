@@ -1,0 +1,9 @@
+# /usr/share/icons/ar0x-cursors/index.theme
+# XCursor theme metadata (freedesktop Icon Theme Specification).
+[Icon Theme]
+Name=ar0x Cursors
+Comment=ar0x 0.1.0 "ar0x root" cyan/magenta/lime cursor set
+Inherits=Adwaita
+# Inherits is a deliberate SAFETY NET: we ship 5 authored shapes + 12 aliases.
+# Any cursor name we do not provide resolves through Arch's adwaita-cursors,
+# which is a hard dependency of gtk3 and is always present on the ISO.

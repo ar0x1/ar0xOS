@@ -1,0 +1,8 @@
+# /etc/skel/.icons/default/index.theme
+# PHASE 7 (RISK-040 CLOSED): point new users at the real ar0x XCursor theme.
+# It lives at /usr/share/icons/ar0x-cursors/ and Inherits=Adwaita, so every
+# cursor name we did not author still resolves through the official package.
+[Icon Theme]
+Name=ar0x Default
+Comment=ar0x 0.1.0 "ar0x root" cyan/magenta/lime cursors
+Inherits=ar0x-cursors

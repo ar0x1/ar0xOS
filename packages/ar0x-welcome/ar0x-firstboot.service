@@ -1,0 +1,26 @@
+# /usr/lib/systemd/system/ar0x-firstboot.service
+# -----------------------------------------------------------------------------
+# PHASE 8 — armed by Calamares' `finished` module (Phase 10) on the TARGET only.
+# It is deliberately NOT listed in config/system/systemd/system-preset/50-ar0x.preset:
+# on the live ISO the ar0x-welcome package is not installed yet, so `preset-all`
+# would emit a "unit not found" warning. The preset file remains the ONE owner
+# of live-ISO system service state (Phase 5 decision).
+#
+# ConditionFirstBoot=yes relies on systemd's /etc/machine-id first-boot marker.
+# Calamares' `machineid` module MUST regenerate machine-id on the target; this
+# is a Phase 10 manual gate. ConditionPathExists=! is a second, portable guard.
+# -----------------------------------------------------------------------------
+[Unit]
+Description=ar0x first-boot arming (RISK-013 guard + welcome user unit)
+Documentation=https://github.com/ar0x1/ar0xOS/tree/main/docs
+ConditionFirstBoot=yes
+ConditionPathExists=!/var/lib/ar0x/firstboot-done
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/ar0x/ar0x-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

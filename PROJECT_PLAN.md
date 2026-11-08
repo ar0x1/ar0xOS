@@ -1,0 +1,964 @@
+# ar0x — Architecture & Project Plan
+
+> **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
+> Document version: `1.12.0` · Date: `2026-11-08` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **ALL 12 phases source-complete; release gates MANUAL**
+>
+> All versions in this document were verified against upstream releases on 2026-11-03.
+> Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
+
+---
+
+## 0. How to read this document
+
+- This file is the **contract** for Phases 2–12. Every script, config, and asset produced later
+  must land at a path listed in §4 and must use a version listed in §5.
+- **No phase starts until you explicitly confirm the previous phase.** Phase 1 ends at §17
+  with a confirmation gate.
+- Companion documents (all part of Phase 1):
+
+  | File | Purpose |
+  |---|---|
+  | `/home/user/ar0xOS/PROJECT_PLAN.md` | This file — master architecture + plan |
+  | `/home/user/ar0xOS/docs/architecture/BUILD_LAYOUT.md` | Full build-environment directory structure |
+  | `/home/user/ar0xOS/docs/architecture/COMPONENT_VERSIONS.md` | Every major component + version + source + pin policy |
+  | `/home/user/ar0xOS/docs/architecture/DEPENDENCY_GRAPH.md` | Build-order DAG, topological order, critical path |
+  | `/home/user/ar0xOS/docs/architecture/DECISIONS.md` | Architecture Decision Records with tradeoffs |
+  | `/home/user/ar0xOS/docs/architecture/RISK_REGISTER.md` | Risks, ⚠️ warnings, mitigations |
+  | `/home/user/ar0xOS/config/versions.env` | Machine-readable version pins for all later scripts |
+  | `/home/user/ar0xOS/.gitignore` | Keeps ISO/work artifacts out of Git |
+
+- **Sandbox honesty note:** this repository is edited in a non-root sandbox. `mkarchiso`,
+  `pacstrap`, `chroot`, `grub-install`, and QEMU boot tests **cannot execute here**. All files are
+  real and copy-pasteable for a root-capable Arch Linux host; scripts are syntax-checked with
+  `bash -n` and `shellcheck` where available, but functional boot verification is a **manual
+  host-side step** (§14). Phase 9 additionally cannot run `gpg`, `makepkg`, `repo-add`,
+  `pacman`, `namcap` or publish a signed repository here (§10, RISK-051).
+
+---
+
+## 1. Product definition
+
+| Property | Value |
+|---|---|
+| Distribution name | `ar0x` |
+| OS `ID` | `ar0x` |
+| `ID_LIKE` | `arch` |
+| First release | `0.1.0`, codename **"ar0x root"** |
+| Architecture | `x86_64` only for v0.1 (aarch64 deferred to v0.2) |
+| Target audience | Developers (with a security/privacy-conscious default posture) |
+| Aesthetic | Cyberpunk / Dark-Hacker — near-black bases, cyan + magenta accents |
+| ISO target | ~2 GB ("standard"), hard size gate at 2.2 GB |
+| Installer | Calamares 3.4.3 GUI (auto + manual partitioning) |
+| Channels | `testing` (rolling), `stable` (quarterly ISO refresh) |
+| Artifact name | `ar0x-0.1.0-x86_64.iso` |
+| License policy | Base = Arch package licenses; ar0x-authored code = GPL-3.0-or-later; ar0x artwork = CC BY-SA 4.0 |
+
+### 1.1 Goals
+
+1. A **bootable, installable** x86_64 live ISO that boots on both UEFI and BIOS (QEMU + real hardware).
+2. A coherent cyberpunk identity: GRUB → Plymouth → SDDM → Hyprland → GTK/Qt → fastfetch,
+   all using one palette (§7 of `DECISIONS.md`).
+3. A **developer-ready** session out of the box: git, compiler toolchain, container tooling optional,
+   zsh + starship, sane defaults, no bloat.
+4. A **reproducible build**: frozen Arch archive snapshot, version pins, generated package lockfile.
+5. Real distribution engineering: signed custom `[ar0x]` repo, CI-built packages, PKGBUILDs,
+   SHA256 + detached GPG signatures, documented release process.
+
+### 1.2 Non-goals for v0.1
+
+- No aarch64, no RISC-V, no 32-bit (`i686`), no musl variant.
+- No SELinux (AppArmor chosen; see ADR-009).
+- No immutable/read-only root, no A/B updates, no `ostree`.
+- No custom kernel patches or out-of-tree kernel modules in v0.1 (⚠️ see RISK-001).
+  Phase 4 enforces this: `build-kernel.sh --check` and `validate-versions.sh` both
+  fail if any `*.patch` / `*.diff` appears in `config/kernel/patches/`.
+- No Secure Boot **enforcement by default** — shim + signed binaries are provided, but MOK
+  enrollment remains an explicit manual user choice (§14).
+- No official mirror network at v0.1; GitHub Releases is the primary distribution channel.
+
+---
+
+## 2. Architecture at a glance
+
+### 2.1 Layer stack
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ L7  Applications  │ code editor, terminal, browser, ar0x-welcome/info    │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L6  Session       │ Hyprland 0.57.1 (Lua config) + Waybar + hyprpaper     │
+│                   │ hyprlock / hypridle / xdg-desktop-portal-hyprland     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L5  Display mgr   │ SDDM 0.21.0 (X11 greeter → Wayland session)          │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L4  System svcs   │ systemd 262.1 · NetworkManager · PipeWire 1.6.10      │
+│                   │ WirePlumber · journald · nftables · AppArmor · polkit │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L3  Userspace     │ glibc 2.44 · pacman · bash 5.3.20 (scripts)          │
+│                   │ zsh (interactive) · Python 3.14.9 · Qt 6.12 · GTK4   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L2  Kernel        │ linux-lts 6.18.59 · mkinitcpio 42.2 initramfs        │
+│                   │ Plymouth 26.134.222 splash (built into initramfs)     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L1  Bootloader    │ GRUB 2.16 — UEFI (grubx64.efi) + BIOS (isolinux/      │
+│                   │ syslinux) · optional shim + MOK for Secure Boot       │
+├──────────────────────────────────────────────────────────────────────────┤
+│ L0  Firmware      │ UEFI 2.x (CSM-capable) or legacy BIOS                 │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Boot chain — UEFI
+
+```
+UEFI firmware
+  └─> EFI/BOOT/BOOTx86_64.EFI        (shim, optional Secure Boot path)
+        └─> EFI/BOOT/grubx64.efi      (GRUB 2.16, signed)
+              └─> grub.cfg  →  /ar0x/boot/x86_64/vmlinuz-linux-lts
+                             +  /ar0x/boot/x86_64/initramfs-linux-lts.img
+                    └─> kernel 6.18.59 → mkinitcpio initramfs
+                          └─> Plymouth ar0x splash (early KMS)
+                                └─> systemd PID 1 → graphical.target
+                                      └─> SDDM → Hyprland (Wayland session)
+```
+
+### 2.3 Boot chain — BIOS
+
+```
+BIOS → MBR/isohybrid → isolinux/syslinux (archiso BIOS boot entries)
+  └─> same vmlinuz-linux-lts + initramfs-linux-lts.img
+        └─> identical kernel/init/systemd/SDDM/Hyprland chain as §2.2
+```
+
+> **Design invariant:** UEFI and BIOS paths differ **only** in the stage-1 loader. They must
+> load byte-identical kernel + initramfs images. This is why GRUB was chosen over
+> `systemd-boot`/`rEFInd` (see ADR-004) and why Phase 11 tests both paths.
+
+### 2.4 Live ISO runtime
+
+```
+ISO9660 (isohybrid, volume label AR0X_010)
+├── /EFI/BOOT/                      UEFI loaders + GRUB config
+├── /isolinux/ , /syslinux/         BIOS loaders + menus
+├── /ar0x/boot/x86_64/
+│   ├── vmlinuz-linux-lts
+│   ├── initramfs-linux-lts.img
+│   └── airootfs.sfs               zstd-compressed squashfs root
+└── /ar0x/boot/memtest86+/         optional memtest
+
+Boot: kernel boots → initramfs mounts airootfs.sfs read-only (loop)
+      → overlayfs (tmpfs upper, cow_spacesize=50% of RAM by default)
+      → / is writable in RAM; "copytoram" boot option copies the whole sfs to RAM
+      → Calamares can unmount/overwrite the source device safely
+```
+
+### 2.5 Installed system
+
+```
+Disk (GPT for UEFI / MBR for BIOS)
+├── EFI System Partition (FAT32, 512 MiB, /boot/efi)   [UEFI only]
+├── BIOS Boot Partition (1 MiB, no FS)                  [BIOS+GPT only]
+├── / (ext4 default; btrfs offered with @, @home, @log, @pkg subvolumes)
+└── swap (optional file or partition)
+
+Calamares copies the live airootfs → target, generates /etc/fstab, installs
+GRUB, creates the user, then removes live-only hooks (ar0x-live user,
+autologin, live init scripts) and enables the first-boot ar0x-welcome unit.
+```
+
+---
+
+## 3. Confirmed preference stack (locked 2026-11-03)
+
+| # | Preference | Decision | Locked consequences |
+|---|---|---|---|
+| 1 | Base | **Arch** | `archiso` profile, PKGBUILD packaging, rolling repos |
+| 2 | C library | **glibc 2.44** | Binary NVIDIA/Steam compatible; no musl patches |
+| 3 | Package manager | **pacman** | `repo-add -s` custom repo; `SigLevel` signing |
+| 4 | Init system | **systemd 262.1** | NetworkManager, journald, resolved, logind, timedated |
+| 5 | Display server | **Wayland** | X11 only via XWayland fallback |
+| 6 | Desktop / WM | **Hyprland 0.57.1** | ⚠️ **`hyprland.lua`, not `hyprland.conf`** |
+| 7 | Bootloader | **GRUB 2.16** | BIOS + UEFI + theme + Secure Boot shim |
+| 8 | Kernel | **linux-lts 6.18.59** | LTS until Dec 2027; no custom patches in v0.1 |
+| 9 | Shell | **zsh** (interactive), **bash 5.3.20** (all scripts) | Every `*.sh` keeps `#!/bin/bash` |
+| 10 | Audience | **Developers** | Toolchain + git + containers optional in welcome app |
+| 11 | Vibe | **Cyberpunk / Dark-Hacker** | Palette: see §7 |
+| 12 | ISO size | **~2 GB standard** (gate 2.2 GB) | Size budget in §7 |
+| 13 | Installer | **Calamares 3.4.3 GUI** | Codeberg source, not the archived GitHub mirror |
+
+Optional context not explicitly overridden by the user, therefore defaulted here
+(change any of these at the Phase 1 gate):
+`x86_64 only`, `Secure Boot = supported-but-not-enforced`, `reproducible builds = yes`,
+`release cadence = quarterly ISO refresh`, `default locale = en_US.UTF-8`,
+`default timezone = UTC`, `default keymap = us`, `default filesystem = ext4`.
+
+---
+
+## 4. Build environment directory structure
+
+Complete specification: [`docs/architecture/BUILD_LAYOUT.md`](docs/architecture/BUILD_LAYOUT.md).
+Two roots are deliberately separated:
+
+- **SOURCE ROOT** = `/home/user/ar0xOS` — versioned in Git, small, human-edited.
+- **BUILD ROOT** = `/opt/ar0x-build` — root-owned, git-ignored, disposable, 40 GB+ of scratch.
+
+```
+/home/user/ar0xOS/                         # SOURCE ROOT (Git)
+├── README.md                              # Phase 12 (currently just "# ar0xOS")
+├── PROJECT_PLAN.md                        # Phase 1  ← this file
+├── .gitignore                             # Phase 1
+├── docs/
+│   ├── architecture/                      # Phase 1 docs
+│   │   ├── BUILD_LAYOUT.md
+│   │   ├── COMPONENT_VERSIONS.md
+│   │   ├── DEPENDENCY_GRAPH.md
+│   │   ├── DECISIONS.md
+│   │   └── RISK_REGISTER.md
+│   ├── BUILD_HOST.md                      # Phase 2
+│   ├── BOOTSTRAP_GUIDE.md                 # Phase 3
+│   ├── KERNEL_BOOT.md                     # Phase 4
+│   ├── SYSTEM_CONFIG.md                   # Phase 5
+│   ├── DESKTOP_GUIDE.md                   # Phase 6
+│   ├── BRANDING_GUIDE.md                  # Phase 7
+│   ├── TOOLS_GUIDE.md                     # Phase 8
+│   ├── INSTALLER_FLOW.md                  # Phase 10
+│   ├── TESTING_CHECKLIST.md               # Phase 11
+│   └── RELEASE_NOTES_TEMPLATE.md          # Phase 12
+├── config/
+│   ├── versions.env                       # Phase 1 — version pins for all scripts
+│   ├── pacman.conf.build                  # Phase 3 — FROZEN archive snapshot repos
+│   ├── pacman.conf.installed              # Phase 5/9 — rolling + [ar0x] repo
+│   ├── packages.x86_64                    # Phase 3 — canonical ISO package list
+│   ├── bootstrap_packages.x86_64          # Phase 3 — bootstrap buildmode list
+│   ├── kernel/
+│   │   ├── README.md                      # Phase 4 — RISK-001 policy
+│   │   ├── ar0x-lts.config                # Phase 4 — exact menuconfig selections
+│   │   └── patches/README.md              # Phase 4 (EMPTY in v0.1, by design)
+│   ├── mkinitcpio.conf                    # Phase 4
+│   ├── mkinitcpio.d/linux-lts.preset      # Phase 4
+│   ├── default/grub                       # Phase 4
+│   ├── plymouth/plymouthd.conf            # Phase 4
+│   ├── system/                            # Phase 5 — mirrors /etc/ paths 1:1
+│   │   ├── NetworkManager/
+│   │   ├── pipewire/
+│   │   ├── systemd/
+│   │   ├── security/
+│   │   └── locale/
+│   ├── desktop/                           # Phase 6 ✅
+│   │   ├── hypr/hyprland.lua + lua/*.lua  # ⚠️ Lua ONLY (0.57 removed .conf)
+│   │   ├── hypr/{hyprpaper,hyprlock,hypridle}.conf
+│   │   ├── waybar/ , kitty/ , wofi/ , mako/
+│   │   ├── gtk-3.0/ , gtk-4.0/ , qt5ct/ , qt6ct/ , fontconfig/
+│   │   ├── xdg/mimeapps.list
+│   │   ├── etc/{sddm.conf.d,environment.d,xdg}/  # → /etc/** 1:1
+│   │   └── skel/                          # → /etc/skel/** 1:1 (11 dotfiles)
+│   │       └── .config/{hypr,waybar,gtk-*,qt*ct,...} # GENERATED copies
+│   ├── branding/                          # Phase 7 ✅ CANONICAL identity
+│   │   ├── os-release, lsb-release, issue, issue.net, motd
+│   │   ├── palette.conf                   # 8 hex pins (parity with versions.env)
+│   │   ├── ascii/{ar0x-ascii.txt,ar0x-fastfetch.txt,ar0x-screenfetch.sh}
+│   │   ├── fastfetch/config.jsonc , neofetch/config.conf
+│   │   └── screenfetch/ar0x-screenfetch.sh
+│   ├── tools/                             # Phase 8 ✅ CANONICAL tool configs
+│   │   ├── links.conf , extra-groups.conf
+│   │   └── update.conf                    # → /etc/ar0x/update.conf
+│   ├── calamares/                         # Phase 10
+│   │   ├── settings.conf
+│   │   └── modules/
+│   └── repo/                              # Phase 9
+│       └── pacman.conf.ar0x-entry
+├── archiso/                               # Phase 3 — COMPLETE archiso 92 profile
+│   ├── profiledef.sh                      # CANONICAL (sourced by mkarchiso)
+│   ├── packages.x86_64                    # synced from config/packages.x86_64
+│   ├── bootstrap_packages.x86_64          # synced from config/bootstrap_packages.x86_64
+│   ├── pacman.conf                        # rendered from config/pacman.conf.build
+│   ├── grub/grub.cfg                      # UEFI GRUB menu (Phase 4 brands it)
+│   ├── syslinux/syslinux.cfg              # BIOS isolinux menu (Phase 4 brands it)
+│   ├── efiboot/                           # unused: uefi.grub, not systemd-boot
+│   ├── airootfs/                          # overlay copied into the live root
+│   │   ├── etc/mkinitcpio.conf.d/archiso.conf       # MANDATORY live hooks
+│   │   ├── etc/pacman.d/hooks/90-ar0x-build-stamp.hook
+│   │   ├── etc/{hostname,locale.conf,vconsole.conf}
+│   │   └── usr/ , root/ , opt/ , var/    # NO customize_airootfs.sh (deprecated)
+│   └── bootstrap.sh                       # Phase 3
+├── assets/
+│   ├── logo/                              # Phase 7 ✅ SVG MASTERS
+│   │   ├── ar0x-logo.svg (512x512) , ar0x-logo-mono.svg
+│   │   ├── ar0x-wordmark.svg (1024x256) , LICENSE (CC BY-SA 4.0)
+│   │   └── ar0x-logo-{256,512}.png       # generated raster fallbacks
+│   ├── wallpapers/                        # Phase 6 ✅ 3x 4K PNG + PLACEHOLDERS.md
+│   ├── plymouth/ar0x/                     # Phase 4 ✅ / Phase 7 ✅ final art
+│   ├── grub-theme/ar0x/                   # Phase 4 ✅ / Phase 7 ✅ final art + layout
+│   ├── syslinux/splash.png                 # Phase 4 ✅ / Phase 7 ✅ final art
+│   ├── sddm/ar0x/                         # Phase 6 ✅ Qt6 QML theme + bg.png
+│   ├── icons/ar0x-logo.svg                 # Phase 7 ✅ LOGO=ar0x-logo icon
+│   ├── cursors/ar0x-cursors/               # Phase 7 ✅ XCursor theme (RISK-040 CLOSED)
+│   └── ascii/README.md                     # Phase 7 ✅ canonical art lives in config/branding/
+├── packages/                              # Phase 9 ✅ all 8 PKGBUILDs (57/57 sums)
+│   ├── README.md                          # ownership / deferral index
+│   ├── ar0x-info/{PKGBUILD,ar0x-info,ar0x-info.desktop,fastfetch.jsonc,*.txt}
+│   ├── ar0x-update/{PKGBUILD,ar0x-update,ar0x-update.desktop,update.conf}
+│   ├── ar0x-welcome/{PKGBUILD,ar0x-welcome.py,*.desktop,*.css,*.conf,
+│   │                ar0x-welcome.service,ar0x-firstboot.service,
+│   │                ar0x-firstboot,ar0x-apparmor-ctl,*.install}
+│   └── {ar0x-theme,ar0x-wallpapers,ar0x-hypr-config,ar0x-keyring,ar0x-meta}/
+│       └── {PKGBUILD,README.md,...}       # ✅ Phase 9 (ADR-024 one-owner-per-path)
+├── tools/                                 # all scripts: #!/bin/bash + set -euo pipefail
+│   ├── lib/common.sh
+│   ├── setup-build-env.sh                 # Phase 2
+│   ├── bootstrap.sh                       # Phase 3
+│   ├── build-kernel.sh                    # Phase 4
+│   ├── gen-theme-assets.sh                # Phase 4 — deterministic PNG artwork
+│   ├── configure-system.sh                # Phase 5 — core system config
+│   ├── configure-desktop.sh               # Phase 6 — --check/--sync/--apply
+│   ├── gen-desktop-assets.sh              # Phase 6 — deterministic 4K wallpapers
+│   ├── lib/{common.sh,ar0x_logo.py,ar0x_xcursor.py}  # Phase 7 shared geometry
+│   ├── gen-branding-assets.sh             # Phase 7 — logo PNGs + XCursor binaries
+│   ├── configure-branding.sh              # Phase 7 — --check/--sync/--apply
+│   ├── lib/ar0x_pkgbuild.py               # Phase 8+9 — 8-package PKGBUILD validator
+│   ├── lib/ar0x_repo.py                   # Phase 9 — repo policy/CI/secret validator
+│   ├── configure-tools.sh                 # Phase 8 — --check/--sync/--self-test/--build
+│   ├── setup-repo.sh                      # Phase 9 — check/sync/self-test/verify/
+│   │                                      # keygen/build/sign/publish driver
+│   ├── build-iso.sh                       # Phase 11 (master orchestrator)
+│   ├── checksum.sh                        # Phase 11
+│   └── validate-versions.sh                # Phase 1 helper
+├── repo/                                  # Phase 9 — built package output (gitignored)
+├── ci/workflows/                          # Phase 9 ✅ validate/build/release YAMLs
+├── config/repo/                           # Phase 9 ✅ canonical repo policy
+├── docker/                                # Phase 2 — Docker option
+│   ├── Dockerfile , compose.yaml , run.sh
+├── vagrant/                               # Phase 2 — Vagrant option
+│   └── provision.sh
+├── Vagrantfile                            # Phase 2 — Vagrant definition
+├── tests/                                 # Phase 11 — QEMU helpers
+└── build/                                # gitignored; symlink → BUILD ROOT
+
+/opt/ar0x-build/                           # BUILD ROOT (root-owned, disposable)
+├── work/                                  # mkarchiso work dir (10–25 GB)
+├── out/                                   # final ISO + checksums
+├── chroot/                                # manual chroot test mount
+├── cache/                                 # pacman package cache (shared across builds)
+├── src/                                   # source tarballs (Calamares, Hyprland)
+├── repo/x86_64/                           # [ar0x] repo db + packages
+├── keys/                                  # GPG signing keys (mode 0700)
+└── logs/                                  # per-stage build logs
+```
+
+**Rule:** `config/system/**` mirrors the target `/etc/**` tree 1:1, as do
+`config/desktop/skel/**` → `/etc/skel/**` and `config/desktop/etc/**` → `/etc/**`
+(Phase 6). A file at `config/system/NetworkManager/conf.d/10-ar0x.conf` lands at
+`/etc/NetworkManager/conf.d/10-ar0x.conf`; a file at
+`config/desktop/etc/sddm.conf.d/10-ar0x.conf` lands at `/etc/sddm.conf.d/10-ar0x.conf`.
+Generated copies under `config/desktop/skel/.config/{hypr,waybar,gtk-*,qt*ct,...}` and
+`archiso/airootfs/**` are produced by `--sync` and must NEVER be hand-edited.
+
+---
+
+## 5. Component & version matrix (summary)
+
+Full matrix with sources, checksums, and pin policy:
+[`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
+Machine-readable pins: `/home/user/ar0xOS/config/versions.env`.
+
+| Layer | Component | Pinned version | Pin class |
+|---|---|---|---|
+| Base | Arch Linux snapshot | `2026.11.0` / archive date `2026-11-01` | SNAPSHOT |
+| Build | archiso | `92-1` | SNAPSHOT |
+| Base | glibc | `2.44` | SNAPSHOT |
+| Base | bash | `5.3.20` | SNAPSHOT |
+| Base | pacman / systemd | rolling / `262.1` | SNAPSHOT |
+| Kernel | linux-lts | `6.18.59-1` | SNAPSHOT |
+| Kernel | mkinitcpio | `42.2` | SNAPSHOT |
+| Boot | GRUB | `2.16` | SNAPSHOT |
+| Boot | Plymouth | `26.134.222-2` | SNAPSHOT |
+| Graphics | Mesa | `26.2.6` | SNAPSHOT |
+| Graphics | NVIDIA driver | `615.78.08` | SNAPSHOT |
+| Audio | PipeWire | `1.6.10` | SNAPSHOT |
+| Desktop | Hyprland | `0.57.1` (2026-11-03) | HARD |
+| Desktop | hyprpaper / hyprlock / hypridle | `0.8.5` / `0.9.7` / `0.1.8` | HARD |
+| Desktop | xdg-desktop-portal-hyprland / hyprpicker | `1.5.0` / `0.4.8` | HARD |
+| Desktop | Waybar | `0.15.0` | HARD |
+| Desktop | SDDM | `0.21.0-7` | SNAPSHOT |
+| Toolkit | Qt / GTK4 / Python | `6.12` / `4.24.1` / `3.14.9` | SNAPSHOT |
+| Installer | Calamares | `3.4.3` (Codeberg, 2026-09-10) | HARD |
+| Toolchain | LLVM/Clang / Go / Rust / Node | `23.1.4` / `1.27.3` / `1.99.1` / `26.13` | FLOATING |
+
+### 5.1 Pin policy (three classes)
+
+| Class | Meaning | Enforcement |
+|---|---|---|
+| **SNAPSHOT** | Version comes from a frozen Arch mirror date in `config/pacman.conf.build` | `Server = https://archive.archlinux.org/repos/2026/11/01/$repo/os/$arch`; a `packages.lock` is generated from `pacman -Q` inside the built airootfs |
+| **HARD** | Built from source / vendored tarball at an exact tag with a recorded SHA256 | `tools/validate-versions.sh` verifies the tag+hash before every ISO build |
+| **FLOATING** | Optional add-ons installed by the welcome app or user; not part of the ISO | Documented, never in the ISO size budget |
+
+**Phase 3 staging rule:** `tools/bootstrap.sh` copies `archiso/` into a disposable
+`/opt/ar0x-build/profile/` and renders `config/pacman.conf.build` there. It **drops** the marked
+`[ar0x]` block when `/opt/ar0x-build/repo/x86_64/ar0x.db` does not exist (Phase 3 has no
+HARD-pinned packages yet), otherwise `pacman -Sy` would abort. Phase 11 keeps the block.
+`archiso/profiledef.sh` uses `buildmodes=('bootstrap' 'iso')` and
+`bootmodes=('bios.syslinux' 'uefi.grub')` per archiso 92.
+
+**Two-tier sourcing (ADR-017, added in Phase 2):** the HARD-pinned versions are *not* in the
+frozen `2026/11/01` snapshot — `hyprland 0.57.1` was released 2026-11-03 and currently sits in
+`[extra-testing]` only, and `calamares 3.4.3` is not in the official repos at all. Both are built
+from exact upstream tarballs with `makepkg` in Phases 8/9 into the signed `[ar0x]` repo, which
+`config/pacman.conf.build` lists **first** (local `file:///opt/ar0x-build/repo/x86_64` server).
+pacman prefers the first providing repo, so `hyprland 0.57.1` wins over `[extra]`'s `0.57.0-3`.
+Enabling `[extra-testing]` instead would drag in every testing package and destroy reproducibility.
+**Host consequence:** Phase 2 installs a full source-build toolchain (`base-devel devtools cmake
+ninja extra-cmake-modules pkgconf meson namcap`); `makepkg -s` resolves the remaining deps.
+
+⚠️ **Two pacman.conf files must never be swapped.** `pacman.conf.build` points at a frozen
+archive and is used **only** by `mkarchiso`. `pacman.conf.installed` uses live mirrors +
+`[ar0x]` and is what ends up in `/etc/pacman.conf` on the installed system. Shipping the
+frozen one to users would permanently pin their system to 2026-11-01 packages (RISK-006).
+
+### 5.2 Two verified upstream gotchas (already reflected in the plan)
+
+1. **Hyprland 0.57 removed `hyprland.conf`.** Lua config (`hyprland.lua`) has been available
+   since 0.55 and became mandatory in 0.57.0; there is **no automatic converter**. Phase 6
+   therefore ships `/etc/skel/.config/hypr/hyprland.lua` and Lua modules, and Phase 6's
+   validation step runs `hyprctl config` / `hyprland --verify-config` against a real session.
+   Shipping a `.conf` would produce a silently unconfigured compositor.
+2. **Calamares moved to Codeberg.** The GitHub repo `calamares/calamares` is an archived
+   mirror whose latest tag is `v3.4.2`-era `v3.3.14` (2025-02-20). Current stable is
+   **3.4.3** (2026-09-10, SHA256 `144cbbf6bdcebfb21685950db4f0777218519df095f62f4aa392f28348110d18`,
+   signing key `6D08 3784 1C06 8A23 3F24 127B 14B6 CC38 1BC2 56D6`). 3.4.3 also fixes QML
+   keyboard input under Wayland — **required** for a Calamares GUI running inside a Wayland-first
+   live session. Phase 9/10 build it from the Codeberg tarball, not the GitHub mirror.
+3. **`archiso` is `92-1`, not `91`** (Phase 2 correction, verified at
+   <https://archlinux.org/packages/extra/any/archiso/>, built 2026-10-31). archiso 92 changed the
+   profile contract: `profiledef.sh` now needs `buildmodes=('iso')`,
+   `bootmodes=('bios.syslinux' 'uefi.grub')`, `pacman_conf`, `airootfs_image_type`, and
+   `bootstrap_tarball_compression`. This confirms the BIOS-syslinux / UEFI-GRUB design in §2.3
+   and makes `syslinux` + `grub` mandatory host packages.
+4. **HARD pins are outside the frozen snapshot** — resolved by ADR-017's two-tier repo design
+   in §5.1. `hyprland 0.57.0-3` is what `[extra]` had on 2026-11-01; `0.57.1-1` is in
+   `[extra-testing]`. Never enable `[extra-testing]` to fix this.
+
+---
+
+## 6. Build order dependency graph
+
+Full DAG, edge list, topological order, and critical path:
+[`docs/architecture/DEPENDENCY_GRAPH.md`](docs/architecture/DEPENDENCY_GRAPH.md).
+
+High-level phase DAG (each edge = "cannot start until the predecessor's exit gate passes"):
+
+```mermaid
+flowchart TD
+    P1["P1 Architecture &amp; Planning"] --> P2["P2 Build Environment"]
+    P2 --> P3["P3 Base Bootstrap"]
+    P3 --> P4["P4 Kernel &amp; Boot"]
+    P3 --> P5["P5 Core System Config"]
+    P4 --> P5
+    P5 --> P6["P6 Desktop &amp; Theming"]
+    P3 --> P7["P7 Branding &amp; Identity ✅"]
+    P4 --> P7
+    P7 --> P6
+    P6 --> P8["P8 Custom ar0x Tools ✅"]
+    P5 --> P8
+    P8 --> P9["P9 Package Repository"]
+    P9 --> P10["P10 Installer"]
+    P6 --> P10
+    P7 --> P10
+    P4 --> P11["P11 ISO Build &amp; Testing"]
+    P9 --> P11
+    P10 --> P11
+    P11 --> P12["P12 Release &amp; Distribution"]
+```
+
+**Critical path:** `P1 → P2 → P3 → P4 → P7 → P6 → P8 → P9 → P10 → P11 → P12`.
+`P5` runs in parallel with `P4` after `P3`; its outputs are needed by `P6` and `P8`.
+
+**Topological build order (what `tools/build-iso.sh` will execute in Phase 11):**
+`validate-versions → setup-build-env → sync-profile → mkarchiso bootstrap → kernel/initramfs
+→ system-config overlay → branding overlay → desktop overlay → build ar0x packages →
+repo-add + sign → calamares config → mkarchiso build → QEMU smoke → checksum + sign`.
+
+---
+
+## 7. ISO composition & size budget (~2 GB target)
+
+| Payload | Uncompressed estimate | Compressed estimate | Notes |
+|---|---:|---:|---|
+| Base airootfs (core + systemd + NetworkManager) | ~1.1 GB | ~420 MB | zstd level 15 in `profiledef.sh` |
+| Developer toolchain (git, base-devel subset, python, neovim) | ~700 MB | ~280 MB | FLOATING extras excluded |
+| Hyprland + ecosystem + Waybar + portals | ~450 MB | ~180 MB | HARD pins |
+| Qt 6.12 + Calamares 3.4.3 + KPMcore | ~600 MB | ~240 MB | Largest single optional block |
+| SDDM + GTK4 + Python GTK4 (ar0x-welcome) | ~350 MB | ~140 MB | |
+| Mesa 26.2.6 + firmware (linux-firmware subset) | ~900 MB | ~360 MB | ⚠️ full `linux-firmware` is ~400 MB alone |
+| Kernel + initramfs (with Plymouth) | ~250 MB | ~180 MB | initramfs is NOT squashfs-compressed |
+| Boot catalogs, EFI loaders, GRUB theme, assets | ~120 MB | ~90 MB | wallpapers = 3 deterministic 4K PNGs (~250 KB), kept as v0.1 art (ADR-022) |
+| **Total** | **~4.5 GB** | **~1.9 GB** | gate: **fail if > 2.2 GB** |
+
+**Tradeoffs when the budget is exceeded (in the order I will apply them):**
+1. Trim `linux-firmware` to the `linux-firmware-whence`-filtered subset for common Wi-Fi/GPU
+   (saves ~200 MB compressed) — but **hurts out-of-box WiFi**, which Phase 11 must then test
+   explicitly. This is the single most consequential size-vs-compatibility tradeoff.
+2. Drop LibreOffice / large optional apps (they are welcome-app installs, not ISO content).
+3. Raise zstd level from 15 → 19 (≈ +3–6% ratio, +40% build CPU time; slows live boot slightly).
+4. Reduce wallpaper set from 4K to 1080p JPEGs.
+5. Only as a last resort: drop Calamares → CLI-only installer. **Requires your approval**, as it
+   changes a locked preference.
+
+`profiledef.sh` will set `airootfs_image_type="squashfs"`,
+`airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M')`,
+and `tools/build-iso.sh` enforces the 2.2 GB gate with `stat -c %s`.
+
+**Phase 11 ✅ COMPLETE (ADR-027):** `tools/build-iso.sh --build` implements that
+gate (`2362232012` bytes), sets `SOURCE_DATE_EPOCH` from the frozen snapshot,
+runs `mkarchiso -v -m iso`, and REFUSES to build until a published release key
+and a signed `[ar0x]` db exist. `config/iso/size-budget.conf` encodes these 8
+rows verbatim (1890 MiB compressed, 362 MiB headroom); `ar0x_iso.py --self-test`
+really exercises the gate with sparse `gate+1` / `gate-1` files. `docs/TESTING_CHECKLIST.md`
+is the 40-item / 100% exit gate.
+
+---
+
+## 8. Boot, theme & installer architecture
+
+### 8.1 Boot assets (`archiso/` + `assets/`)
+
+| Full path in the built ISO | Source in repo |
+|---|---|
+| `/EFI/BOOT/BOOTx86_64.EFI` | shim (optional SB path), `assets/grub-theme/` |
+| `/EFI/BOOT/grubx64.efi` | GRUB 2.16, built by `mkarchiso` |
+| `/boot/grub/grub.cfg` | `archiso/grub/grub.cfg` |
+| `/boot/grub/themes/ar0x/theme.txt` | `assets/grub-theme/ar0x/theme.txt` |
+| `/isolinux/isolinux.cfg`, `/syslinux/syslinux.cfg` | `archiso/isolinux/`, `archiso/syslinux/` |
+| `/ar0x/boot/x86_64/vmlinuz-linux-lts` | `archiso/airootfs/boot/` |
+| `/ar0x/boot/x86_64/initramfs-linux-lts.img` | `mkinitcpio` via `config/mkinitcpio.conf` |
+| `/usr/share/plymouth/themes/ar0x/ar0x.plymouth` | `assets/plymouth/ar0x/` |
+
+### 8.2 Color palette (locked, used by every theme)
+
+| Token | Hex | Use |
+|---|---|---|
+| `AR0X_VOID` | `#07090F` | Base background, GRUB bg, terminal bg |
+| `AR0X_SURFACE` | `#11151F` | Panels, window borders (inactive) |
+| `AR0X_CYAN` | `#00E5FF` | Primary accent, active border, links |
+| `AR0X_MAGENTA` | `#FF2E88` | Secondary accent, warnings, highlights |
+| `AR0X_LIME` | `#A8FF60` | Success states, prompts |
+| `AR0X_TEXT` | `#D7E0EE` | Primary foreground |
+| `AR0X_MUTED` | `#6B7891` | Dimmed text, inactive borders |
+| `AR0X_ALERT` | `#FF5C57` | Errors |
+
+### 8.3 Calamares module order (Phase 10)
+
+`welcome → locale → keyboard → partition → users → package-select →
+bootloader → unpackfs → initramfs → grubcfg → removeuser → finished`
+
+- `welcome` = ar0x-branded QML/branding module with the SVG logo and the ar0x palette.
+- `partition` = auto (erase disk, ext4/btrfs) + manual (GParted-style KPMcore editor).
+- `package-select` = `minimal / standard / full` maps to three package-group lists in
+  `config/calamares/modules/ar0x-packages.conf`.
+- `bootloader` = GRUB, UEFI + BIOS detection, ESP handling, Secure-Boot-aware.
+- `finished` = offers reboot, disables the live autologin, arms `ar0x-welcome` first-boot unit.
+
+**ADR-026 (Phase 10 ✅ COMPLETE)** maps this logical order onto the real
+Calamares 3.4 `show / exec / show` contract in `config/calamares/settings.conf`:
+`package-select` is `packagechooser@ar0x-packages` (view) plus the `packages`
+job (exec); "initramfs" is Arch-native `initcpiocfg` + `initcpio`;
+`bootloader`/`grubcfg` run **after** `unpackfs` because they write into the
+target rootfs; `mount`, `machineid`, `fstab`, `localecfg`, `displaymanager`,
+`networkcfg`, `hwclock`, `services-systemd` and `umount` are required job
+modules. Full step-by-step flow and the ⚠️ RISK-004 disk check:
+[`docs/INSTALLER_FLOW.md`](docs/INSTALLER_FLOW.md).
+
+### 8.4 First-boot flow
+
+```
+Calamares shellprocess@ar0x-finish (P10) arms the unit + writes the systemd first-boot sentinel
+systemd → ar0x-firstboot.service (SYSTEM, ConditionFirstBoot=yes, ROOT, oneshot)
+   └─> /usr/lib/ar0x/ar0x-firstboot
+         ├─ RISK-013 guard: FAIL if any NOPASSWD sudoers rule survived
+         ├─ symlink the user unit into graphical-session.target.wants/
+         └─ stamp /var/lib/ar0x/firstboot-done
+graphical-session.target → ar0x-welcome.service (USER, NORMAL USER, no root)
+   └─> ExecCondition: ~/.config/ar0x/welcome-done must be ABSENT
+   └─> /usr/bin/ar0x-welcome --firstboot (GTK4)
+         ├─ logo + system summary (ar0x-info --json, 8 rows)
+         ├─ "Check for updates" → ar0x-update --check
+         ├─ "Install extras" → pkexec /usr/bin/pacman -S --needed <official group>
+         ├─ AppArmor enforcing opt-in → /usr/lib/ar0x/ar0x-apparmor-ctl
+         ├─ links: docs / community / issue tracker / source / upstream
+         └─ writes ~/.config/ar0x/welcome-done → service is skipped thereafter
+```
+
+⚠️ **Two units are required:** a system unit cannot open a Wayland window, and
+a user unit has no `ConditionFirstBoot`. `ar0x-firstboot.service` is deliberately
+NOT in `50-ar0x.preset` (that preset is the single owner of live-ISO service
+state; the package is not installed on the ISO until Phase 11). Phase 10 arms
+it with a **plain symlink** (no D-Bus in a chroot) and writes `uninitialized`
+to `/etc/machine-id` so `ConditionFirstBoot=yes` fires; see ADR-026 and
+`docs/INSTALLER_FLOW.md §4`. Full wiring: `docs/TOOLS_GUIDE.md §3`.
+
+---
+
+## 9. Security architecture
+
+| Control | Implementation | Phase |
+|---|---|---|
+| Package authenticity | **installed** `[ar0x] SigLevel = Required` (packages AND db, inherits `TrustedOnly`); **build-only** `config/pacman.conf.build` uses `Optional TrustAll` with `file://@AR0X_REPO_DIR@` and is NEVER installed (RISK-006). `makepkg --sign` / `gpg --detach-sign` creates per-package `.sig`; `repo-add -s -v --include-sigs` signs the db. Unsafe: `Never`, `Optional`, `TrustAll`, `DatabaseOptional` | 3, 9 ✅ |
+| Repo signing | Offline GPG key in `/opt/ar0x-build/keys/gnupg` (mode 0700, MANUAL `--keygen`), public armored key shipped in `ar0x-keyring`, `pacman-key --populate ar0x` + `ar0x-trusted` ownertrust. `RELEASE_KEY_FINGERPRINT` is `PENDING-KEYGEN` (RISK-051) | 9 ✅ tooling / MANUAL key |
+| Secure Boot (optional) | `shim-signed` + `sbsigntools`-signed GRUB/kernel; **MOK enrollment is manual** | 4, 11 |
+| MAC | AppArmor in `complain` mode for v0.1; `aa-enforce` opt-in via welcome app | 5 |
+| Firewall | nftables: default `drop` inbound, allow established/related + loopback, ICMP rate-limited | 5 |
+| Kernel hardening | `kernel.kptr_restrict=2`, `kernel.dmesg_restrict=1`, `net.ipv4.conf.all.rp_filter=1`, `kernel.unprivileged_bpf_disabled=1`, ASLR `randomize_va_space=2` | 5 |
+| Logging | journald `Storage=persistent`, `SystemMaxUse=500M`, `ForwardToSyslog=no` | 5 |
+| Accounts | Live user `ar0x` with passwordless sudo **only in live session**; installed user has a real password + `wheel` sudo with `NOPASSWD` removed | 5, 10 |
+| Polkit | `hyprpolkitagent` for GUI elevation; no blanket admin rules | 6 |
+| Updates | `ar0x-update` refuses to run as bare root, asserts `[ar0x] SigLevel=Required`, verifies `ar0x.db.sig` in an isolated `--dbpath`, uses a temporary-dbpath `-Qu` for `--check`, hard-rejects `--noconfirm`/`-Sy`-alone, and offers a `--rollback` cache list. `--upgrade` needs interactive `yes` + polkit. | 8 ✅ |
+
+**Threat model (v0.1):** protects against unauthenticated package installation, casual local
+privilege escalation, and unsolicited inbound network traffic. **Out of scope:** full-disk
+encryption by default (offered as a Calamares checkbox, manual), hardened kernel patchsets,
+SELinux, mandatory access control in enforcing mode, reproducible bit-for-bit ISO builds
+(v0.1 targets *package-level* reproducibility only).
+
+⚠️ **AppArmor in enforce mode on a Hyprland/Wayland stack can silently break screen sharing,
+portal access, and GPU helpers.** v0.1 ships `complain` + a documented opt-in. Enforcing it
+by default is a v0.2 decision.
+
+---
+
+## 10. Packaging & repository architecture (Phase 9 ✅ COMPLETE)
+
+```
+/opt/ar0x-build/repo/x86_64/
+├── ar0x.db.tar.zst        (+ .sig)
+├── ar0x.files.tar.zst     (+ .sig)
+└── ar0x-*.pkg.tar.zst    (+ .sig)
+
+/etc/pacman.conf (installed system), [ar0x] FIRST before [core] (ADR-017):
+  [ar0x]
+  SigLevel = Required
+  Server = https://repo.ar0x.dev/$arch        # RESERVED endpoint; Phase 12 DNS + upload
+```
+
+Packages built by CI (`ci/workflows/build-packages.yml`):
+
+| Package | Contents | Phase 9 installed paths (ADR-024, package-PRIVATE) |
+|---|---|---|
+| `ar0x-welcome` | GTK4 Python app + `.desktop` + first-boot unit | `/usr/bin/ar0x-welcome`, `/usr/share/applications/**` (P8) |
+| `ar0x-update` | `pacman` wrapper + `.desktop` | `/usr/bin/ar0x-update`, `/etc/ar0x/update.conf` (P8) |
+| `ar0x-info` | fastfetch wrapper + ASCII logo + `.desktop` | `/usr/bin/ar0x-info`, `/usr/share/ar0x/info/**` (P8) |
+| `ar0x-theme` | GTK3/GTK4, Qt5/Qt6, fontconfig reference tree | `/usr/share/ar0x/theme/**` + `/usr/bin/ar0x-apply-theme` |
+| `ar0x-hypr-config` | Hyprland 0.57 Lua-only config (entry + 10 modules) | `/usr/share/ar0x/hypr-config/**` + `/usr/bin/ar0x-apply-hypr-config` |
+| `ar0x-wallpapers` | 3× 4K wallpapers + SVG masters + boot-art references | `/usr/share/ar0x/wallpapers/**` + `/usr/bin/ar0x-apply-wallpapers` |
+| `ar0x-keyring` | GPG public key + pacman trust bootstrap | `/usr/share/pacman/keyrings/ar0x{gpg,-trusted,-revoked}` |
+| `ar0x-meta` | Meta-package pulling the standard ar0x experience | `/usr/share/doc/ar0x-meta/RELEASE`; depends on the other 7 |
+
+`ci/workflows/build-packages.yml` builds all 8 in a clean `archlinux:base-devel`
+container as a **non-root** `builder` with `makepkg --nodeps --noconfirm --force`
+(`--nodeps` is required for intra-repo depends), then runs `namcap` + `shellcheck`
+and an **UNSIGNED** local `repo-add` smoke test. Signing + publication happen ONLY
+in `ci/workflows/release.yml` (protected Environment, `workflow_dispatch` / `v*`
+tag, NEVER `pull_request`): `gpg --batch --detach-sign` each package, then
+`repo-add -s -v --include-sigs`, then `SHA256SUMS.sig`. RISK-051.
+
+`validate-packages.yml` is the PR-safe workflow: ZERO secrets, the whole read-only
+validator chain + `ar0x_repo.py --self-test` + a private-key scan. `tools/setup-repo.sh`
+provides `--check/--sync/--self-test/--verify/--keygen/--build/--sign/--publish`;
+`--publish` NEVER uploads. See `docs/REPO_GUIDE.md`.
+
+**Phase 9 result (✅ COMPLETE, ADR-024 resolves ADR-023):** ALL EIGHT packages
+now have real PKGBUILDs with local `source=()` arrays and **57 / 57 SHA-256 sums**
+(56 real + 1 MANUAL `SKIP` for the generated `ar0x-public-key.asc`). The
+airootfs overlay keeps its **92** ISO-owned files under `/etc/skel/**` and
+`/usr/share/**`; the five formerly deferred packages instead install
+**package-private reference trees** under `/usr/share/ar0x/<pkg>/**` plus
+three `/usr/bin/ar0x-apply-*` helpers that copy into one user's XDG directories
+with timestamped backups. `ar0x_pkgbuild.validate_ownership()` proves
+`0/8` PKGBUILDs touch an overlay-owned path, so a Calamares install can never
+hit `pacman: conflicting files`. 31 canonical → package mirrors are byte-identical.
+
+⚠️ **MANUAL GATES (RISK-048 / 051):** the offline GPG release key is NOT
+generated (`RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`, `ar0x-trusted` empty),
+no signed `[ar0x]` database exists, no package was built/signed/published, and
+`repo.ar0x.dev` is a RESERVED endpoint. `config/packages.x86_64` still carries
+ZERO `ar0x-*` packages (Phase 11 gate). Acceptance criterion 7 therefore
+remains **blocked on keygen → build → sign → publish**, not on missing source.
+Full procedure: `/home/user/ar0xOS/docs/REPO_GUIDE.md §3`.
+
+---
+
+## 10b. Installer architecture (Phase 10 ✅ COMPLETE)
+
+| Layer | Canonical source | Installed path |
+|---|---|---|
+| Main config | `config/calamares/settings.conf` | `/etc/calamares/settings.conf` |
+| 21 module configs | `config/calamares/modules/*.conf` | `/etc/calamares/modules/*.conf` |
+| Brand | `config/calamares/branding/ar0x/**` | `/etc/calamares/branding/ar0x/**` (preferred over `/usr/share`) |
+| First-boot helper | `config/installer/ar0x-installer-finish` | `/usr/lib/ar0x/ar0x-installer-finish` (`0755`) |
+| Launcher | `config/installer/ar0x-installer.desktop` | `/usr/share/applications/ar0x-installer.desktop` |
+
+`tools/bootstrap.sh` overlays `config/calamares/**` → `/etc/calamares/**` at
+ISO build time; **ADR-024** forbids a duplicate in `archiso/airootfs/etc/`.
+`tools/configure-installer.sh --sync` regenerates the byte-identical logo
+mirror, installs the helper + launcher into the airootfs, and stages a
+disposable `build/installer-prefix`. `ar0x_installer.py` validates the
+3-phase sequence, 3 instances, 21 configs, 8 palette pins, 3 official-only
+package groups, RISK-003/004/013 and the Codeberg 3.4.3 pin — with **9
+negative mutation tests** and a real `ar0x-installer-finish` run into a
+throwaway target root.
+
+⚠️ **MANUAL GATES (RISK-048/051/052):** `calamares` is NOT in
+`config/packages.x86_64` (it does not exist in official Arch repos and the
+signed `[ar0x]` db does not exist yet), no GUI was launched, no disk was
+partitioned, and no full install → reboot → first-boot cycle ran. Phase 11
+must publish Calamares 3.4.3 from the Codeberg tarball, add it with
+`ar0x-meta`, then run the QEMU flow in `docs/INSTALLER_FLOW.md §2/§6`.
+
+---
+
+## 11. Release engineering
+
+| Property | Value |
+|---|---|
+| Version scheme | `MAJOR.MINOR.PATCH` (`0.1.0`), ISO tag `v0.1.0` |
+| Codename | `ar0x root` for 0.1.x |
+| Cadence | Quarterly stable ISO; `testing` packages continuous |
+| Artifact set | `.iso`, `SHA256SUMS`, `SHA256SUMS.sig`, `ar0x-0.1.0-x86_64.iso.sig`, `CHANGELOG.md`, `README.md` |
+| Signing | Detached GPG signature with the release key; key fingerprint published in README |
+| Primary host | GitHub Releases on `ar0x1/ar0xOS` |
+| Secondary | own server via `rsync`, then SourceForge / OSDN (Phase 12) |
+| Listing | DistroWatch submission draft (Phase 12) |
+| EOL | `stable` ISO supported until the next stable + 1 month |
+| Phase 12 status | ✅ Source-complete (ADR-028): README, changelog, 21 release pins, 5 release docs, print-only driver + validator. ⚠️ **NOT RELEASED** — RISK-054; `--publish` NEVER uploads; see `docs/RELEASE_GUIDE.md` |
+| Post-plan completion | ✅ ADR-029: `tools/build-release.sh --run` (one command on a real Arch host), `bootstrap.sh --stage`, staged-only signed-package injection, `ci/workflows/build-iso.yml`, `docs/BUILD_RELEASE_ISO.md`, `validate-versions.sh §7n`. ⚠️ **STILL NO ISO** — no root/mkarchiso/Arch mirrors here; `--run` fails closed |
+
+---
+
+## 12. Tradeoff register (summary)
+
+Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/architecture/DECISIONS.md).
+
+| ID | Decision | Main tradeoff accepted |
+|---|---|---|
+| ADR-001 | Arch base | Rolling freshness vs. frozen-snapshot build complexity |
+| ADR-002 | glibc not musl | Binary driver/app compatibility vs. ~100 MB smaller images |
+| ADR-003 | systemd | Integration vs. independence/smaller footprint |
+| ADR-004 | GRUB | BIOS+UEFI+theming vs. minimal UEFI-only bootloaders |
+| ADR-005 | Hyprland 0.57 + Lua | Best aesthetics vs. must rewrite all configs as Lua |
+| ADR-006 | linux-lts 6.18 | Stability vs. newest hardware/Wayland fixes |
+| ADR-007 | Calamares 3.4.3 from Codeberg | Correct Wayland fixes vs. non-GitHub source in CI |
+| ADR-017 | Two-tier sourcing ([ar0x] first) | Exact HARD pins vs. host source-build toolchain |
+| ADR-018 | pacman hooks + staged profile | No deprecated code, clean Git tree vs. one extra copy |
+| ADR-019 | Stock LTS + zstd initramfs | Zero kernel maintenance vs. cannot enable config options Arch left off |
+| ADR-020 | NetworkManager + balanced hardening | Developer tool compatibility vs. maximal kernel lockdown |
+| ADR-021 | Lua-only desktop, Qt6 SDDM, balanced toolkit theming | 0.57 correctness + reproducibility vs. a full custom GTK/Qt theme engine |
+| ADR-022 | SVG-authoritative identity, standard XCursor, no AUR fetch tool | one geometry source + no build-time compiler vs. a compiled hyprcursor theme and shipping neofetch |
+| ADR-023 | Plain-GTK4 tools, non-root signed-update wrapper, 5 packages deferred to P9 | real offline-testable CLI tools + zero file-ownership conflicts vs. a full 8-package repo in P8 |
+| ADR-024 | ONE OWNER PER PATH: airootfs overlay owns 92 ISO paths; 5 P9 packages install `/usr/share/ar0x/<pkg>/**` + 3 user-space `ar0x-apply-*` helpers; PR-safe CI with zero secrets | all 8 PKGBUILDs buildable with zero pacman file conflicts vs. duplicate theme data on disk and a second copy step for stock-Arch users |
+| ADR-025 | ar0x-only naming: codename `ar0x root` / `ar0x-root`, boot art `AR0X ROOT`, default wallpaper `ar0x-grid.png`, whole-tree naming gate | one self-referential brand enforced by `validate-versions.sh §7j` vs. 72 files + 3 binary renames and repetitive `(ar0x root)` wording |
+| ADR-026 | Calamares 3.4.3 `show/exec/show` real sequence, `/etc/calamares` branding, offline `packagechooser` groups, `initcpiocfg/initcpio`, plain-symlink first-boot arming | a real installable sequence + zero `pacman -Sy` + no second config copy vs. a 22-job exec phase, a dangling first-boot unit until Phase 11, and no live GUI QA |
+| ADR-027 | Size-gate-first ISO build: refuse `--build` without a signed repo, sha256-only release artifacts, disposable OVMF vars + qcow2, 40-item 100% checklist | no unverifiable release and zero host-disk risk vs. a build that cannot run in this sandbox and a checklist that stays 0/40 until Phase 11 QA is manual |
+| ADR-028 | Print-only release driver, exact 6-artifact set + `--verify-tag`, DRAFT/UNRELEASED banners, FPR published out of band | zero false claims and no irreversible accidental upload vs. a tag/announcement that cannot be produced here (RISK-054) |
+| ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
+| ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
+| ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
+
+---
+
+## 13. Risk register (summary)
+
+Full register with mitigations and trigger conditions:
+[`docs/architecture/RISK_REGISTER.md`](docs/architecture/RISK_REGISTER.md).
+
+| ID | Severity | Risk |
+|---|---|---|
+| RISK-001 | ⚠️ CRITICAL | Custom kernel patches / `.config` edits can produce an unbootable ISO — **ZERO patches in v0.1**; Phase 4 ships the stock binary `linux-lts 6.18.59-1`, enforces an empty `patches/` dir, and audits `CONFIG_*` against the frozen kernel config |
+| RISK-002 | HIGH | `hyprland.conf` shipped by mistake → blank/broken session (0.57) |
+| RISK-003 | HIGH | Calamares from the archived GitHub mirror → missing Wayland keyboard fix |
+| RISK-004 | ⚠️ HIGH | Calamares partitioning writes to the wrong disk — **manual, destructive, irreversible** |
+| RISK-005 | HIGH | Trimming `linux-firmware` breaks WiFi on real hardware |
+| RISK-006 | MEDIUM | Frozen build `pacman.conf` shipped to installed systems → permanently stale packages |
+| RISK-007 | MEDIUM | Secure Boot MOK enrollment can soft-brick a machine if mishandled |
+| RISK-008 | MEDIUM | AppArmor enforcing breaks portals → screen sharing/screenshots fail |
+| RISK-009 | MEDIUM | SDDM X11 greeter + Wayland session mismatch on NVIDIA |
+| RISK-044 | ⚠️ HIGH | Brand art never rendered live in this sandbox — structural validation only (P7) |
+| RISK-045 | LOW | `ar0x-wordmark.svg` uses live Inter text; outline for print (P7) |
+| RISK-046 | LOW | PNG raster uses round joins where the SVG uses mitre joins (P7) |
+| RISK-010 | LOW | Rolling Arch snapshot drift despite archive pin (AUR/git sources) |
+| RISK-047 | ⚠️ HIGH | GTK4 ar0x-welcome window never rendered here — structural + headless self-tests only (P8) |
+| RISK-048 | ⚠️ HIGH | Signed `[ar0x]` database is STILL not built/published after P9 tooling; all 8 packages are source-only, `config/packages.x86_64` has zero `ar0x-*` (P8/P9 → P11/P12) |
+| RISK-049 | MEDIUM | All 8 PKGBUILDs checksum-verified (57/57) but never built with `makepkg` / `namcap` (P8/P9) |
+| RISK-050 | LOW | 5 reserved welcome link endpoints + `repo.ar0x.dev`; `/tree/main/docs` needs the PR merged (P12) |
+| RISK-051 | ⚠️ CRITICAL | Offline private release key + CI signing secrets: leakage or a bad published signature is a security incident. `PENDING-KEYGEN`, empty `ar0x-trusted`, PR workflows with ZERO secrets, protected `release` Environment, fork guard, gitignored key artifacts |
+| RISK-052 | ⚠️ HIGH | Phase 10 installer never rendered/booted: no Qt6/QML/Wayland/QEMU/KVM/root here; config, branding, first-boot wiring and offline self-tests only (P10 → P11) |
+| RISK-053 | ⚠️ HIGH | No ISO built, booted, hashed or signed: `mkarchiso`, QEMU, `edk2-ovmf`, `gpg`, KVM, loop devices and root are absent; `docs/TESTING_CHECKLIST.md` is 0/40 unchecked (P11 → MANUAL) |
+| RISK-054 | ⚠️ HIGH | NO tag, GitHub Release, mirror upload, announcement or DistroWatch submission: `PENDING-KEYGEN`, no signed ISO, 0/40 checklist; release docs are DRAFT/UNRELEASED templates (P12 → MANUAL) |
+
+---
+
+## 14. Manual intervention register
+
+Steps that **cannot** be automated, flagged here per the output rules:
+
+| Phase | Action | Who | Why |
+|---|---|---|---|
+| 2 | Run `setup-build-env.sh` as root on a real Arch host | You | Needs `pacman -S`, `/opt` writes |
+| 3 | `arch-chroot` smoke test; visually inspect the live root | You | Requires root + mount namespaces |
+| 4 | Review kernel `.config` diff in `menuconfig` if any option is changed | You | ⚠️ RISK-001 |
+| 4 | Generate + store GPG/MOK keys; enroll MOK in firmware | You | Private key must stay offline; firmware UI |
+| 7 | Visual QA of Plymouth/GRUB/SDDM/cursor artwork; ⚠️ `configure-branding.sh --apply` rebuilds initramfs + `grub.cfg` | You | Aesthetic judgment + RISK-044; no display/KVM/root in sandbox |
+| 8 | `AR0X_CONFIRM_BUILD=yes ./tools/configure-tools.sh --build` on a real Arch host | You | ⚠️ `makepkg -s` may install build deps via sudo/pacman; RISK-049; no rollback |
+| 8 | Boot a real ISO, launch `ar0x-welcome`, click every button, verify polkit agent + CSS | You | ⚠️ RISK-047; no GTK4/display in the sandbox |
+| 8 | ⚠️ `ar0x-update --upgrade` replaces kernel/glibc/GPU drivers | You | No automatic rollback; use `--rollback` + `pacman -U` |
+| 8 | `namcap` / `shellcheck` / `desktop-file-validate` / `systemd-analyze verify` | You | All four unavailable in this sandbox |
+| 9 | `sudo AR0X_CONFIRM_KEYGEN=yes ./tools/setup-repo.sh --keygen` on an AIR-GAPPED host; COMMIT the fingerprint; publish it out of band; run `--sync` | You | Key custody, RISK-051; no gpg/pinentry here |
+| 9 | `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on a real Arch host; then `namcap` + `shellcheck` | You | `makepkg` refuses root; RISK-049 |
+| 9 | `sudo AR0X_CONFIRM_SIGN=yes ./tools/setup-repo.sh --sign` → `--verify` | You | `gpg` + `repo-add -s` unavailable here; RISK-048 |
+| 9 | `./tools/setup-repo.sh --publish` then the printed `rsync` / `gh release create` commands; provision DNS + TLS for `repo.ar0x.dev`; `pacman-key --init` + `--populate ar0x` on a test host | You | `--publish` NEVER uploads; Phase 12 gate |
+| 10 | Verify Phase 10 wiring on a real target: `ar0x-firstboot.service` symlink + `/etc/machine-id` sentinel + zero `NOPASSWD` (`sudo -l`) | You | ⚠️ RISK-013/052; config is delivered, live install is NOT |
+| 10 | ⚠️ Walk the installer flow: `lsblk -o NAME,SIZE,MODEL,TRAN`, TYPE the target device, disposable QEMU disk ONLY | You | ⚠️ RISK-004, destructive, irreversible |
+| 10 | Build/publish Calamares 3.4.3 (Codeberg tarball + detached `.asc`) to the signed `[ar0x]` repo; add `calamares` + `ar0x-meta` to `config/packages.x86_64` | You | RISK-003/048/051; Phase 11 gate |
+| 10 | Launch the GUI on a real Arch live ISO; full install → reboot → `ar0x-welcome` first login; `calamares -d` debug log | You | ⚠️ RISK-052; no Qt6/QML/Wayland/KVM/display/root here |
+| 11 | Real Arch host, root, loop devices, `mkarchiso`/`xorriso`/`qemu-full`/`edk2-ovmf`/`gpg`; `sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build` | You | ⚠️ RISK-053; destructive scratch, needs the signed `[ar0x]` db first |
+| 11 | `AR0X_CONFIRM_SIGN=yes ./tools/checksum.sh --sign` → `--verify`, then QEMU BIOS + UEFI boots and the disposable-qcow2 installer VM | You | ⚠️ RISK-004/048/051/052; no QEMU/KVM/gpg here |
+| 11 | Walk all 40 items of `docs/TESTING_CHECKLIST.md` to **100%**, incl. real-hardware WiFi/BT/audio/GPU and VBox/VMware | You | Acceptance criteria 1–4; aesthetic + hardware judgment |
+| 11 | Confirm SHA256 + GPG signature of the final ISO from a fresh download | You | Release gate (RISK-051) |
+| 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox; see the 4 Phase 11 rows above |
+| 12 | Air-gapped keygen → signed `[ar0x]` db → DNS/TLS for `repo.ar0x.dev` → `config/packages.x86_64` → ISO build → signatures → 40/40 checklist | You | ⚠️ RISK-048/050/051/053/054; the whole §16 runtime chain is MANUAL |
+| 12 | Create an ANNOTATED signed tag `v0.1.0` FIRST, then `gh release create --verify-tag --notes-file ...` with the exact 6 assets | You | RISK-015/054; `--publish` is print-only and NEVER uploads |
+| 12 | `rsync` the 6 artifacts to the mirror; SourceForge / OSDN; `curl -IL` all 5 `AR0X_URL_*` endpoints; fresh-download `gpg --verify` + `sha256sum -c` | You | RISK-050/051; external accounts |
+| 12 | Replace every `{{PLACEHOLDER}}`, remove DRAFT banners, publish the announcement + DistroWatch email (4 required fields), date `CHANGELOG.md` | You | RISK-054; DistroWatch waiting list, no reply expected |
+| 12 | EOL: support until next stable + 1 month; key-rotation/revocation runbook if compromised | You | RISK-051 |
+
+---
+
+## 15. Phase roadmap (all 12 phases, gates)
+
+> This is **planning only** — no phase below is executed until you confirm the prior one.
+
+| Phase | Title | Key deliverables | Exit gate |
+|---|---|---|---|
+| **1** | Architecture & Planning ✅ | `PROJECT_PLAN.md`, **5** architecture docs, `versions.env`, `.gitignore`, directory skeleton | ✅ complete |
+| 2 | Build Environment Setup | `tools/setup-build-env.sh`, `tools/lib/common.sh`, `docs/BUILD_HOST.md`, Docker (`docker/`) + Vagrant (`Vagrantfile`, `vagrant/`) options, 37-package host list, min/recommended hardware, `archiso 92-1` correction, ADR-017 | `--check` and `validate-versions.sh` both pass; `mkarchiso -h` works |
+| 3 | Base System Bootstrap | Full archiso 92 profile (`profiledef.sh`, `pacman.conf`, `packages.x86_64`, `bootstrap_packages.x86_64`, `airootfs/`, `grub/`, `syslinux/`), `config/pacman.conf.build` frozen mirror, `tools/bootstrap.sh`, `docs/BOOTSTRAP_GUIDE.md` chroot guide | `bootstrap.sh --check` passes; `mkarchiso` produces a bootable minimal live root |
+| **4** | Kernel & Boot ✅ | RISK-001: **stock LTS, ZERO patches**; `config/kernel/{README.md,ar0x-lts.config}` audit contract, `config/{mkinitcpio.conf,mkinitcpio.d,default/grub,plymouth/plymouthd.conf}`, ar0x GRUB/Plymouth/syslinux themes, `assets/` deterministic PNG generator, `tools/build-kernel.sh`, `docs/KERNEL_BOOT.md` | `build-kernel.sh --check` + `--self-test` pass; QEMU UEFI+BIOS splash QA is manual |
+| **5** | Core System Configuration ✅ | NetworkManager (systemd-networkd/dhcpcd disabled), PipeWire + WirePlumber 0.5+, Wayland env, live user/sudo/polkit, locale/tz/keymap, journald/logind, default-drop nftables, AppArmor complain, balanced sysctl — 23 files under `config/system/**`, plus `config/pacman.conf.installed` (rolling), `config/repo/pacman.conf.ar0x-entry`, `tools/configure-system.sh`, `docs/SYSTEM_CONFIG.md` | `configure-system.sh --check` passes; `validate-versions.sh` clean with ZERO warnings; QEMU unit/WiFi/audio QA is manual |
+| **6** | Desktop & Theming ✅ | Hyprland **Lua** entry + 10 modules, `hyprpaper`/`hyprlock`/`hypridle`, Waybar, SDDM 0.21 **Qt6** QML theme, GTK3/GTK4 (libadwaita `@define-color`), Qt5/Qt6 via `qt5ct:qt6ct`, Papirus icons, Adwaita cursor placeholder (→ real `ar0x-cursors` in Phase 7), Inter/JetBrainsMono Nerd fontconfig, 3× 4K wallpapers, 11 `/etc/skel` dotfiles + 10 generated `.config` trees, `tools/configure-desktop.sh`, `tools/gen-desktop-assets.sh`, `docs/DESKTOP_GUIDE.md` | `configure-desktop.sh --check` + `validate-versions.sh` (0 warnings) pass; `Hyprland --verify-config`, `sddm-greeter --test-mode`, QEMU Wayland QA are manual |
+| **7** | Branding & Identity ✅ | `/etc/{os-release,lsb-release,issue,issue.net,motd}` + `/usr/lib/os-release`, `palette.conf`, 3 ASCII variants (fastfetch/neofetch/screenfetch), 4 SVG masters + 2 logo PNGs + `LOGO` icon, real ar0x XCursor theme (5 shapes × 3 sizes + 12 aliases), final GRUB/Plymouth/syslinux art, `tools/lib/{ar0x_logo.py,ar0x_xcursor.py}`, `tools/gen-branding-assets.sh`, `tools/configure-branding.sh`, `docs/BRANDING_GUIDE.md`, ADR-022, RISK-040 closed | `configure-branding.sh --check` + `validate-versions.sh` pass (0 warnings); SVG/PNG/XCursor/JSONC all parsed back; `fastfetch` shows ar0x identity |
+| **8** | Custom ar0x Tools ✅ | `ar0x-welcome` (GTK4/PyGObject, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 3 PKGBUILDs with real SHA-256 sums, 2 systemd units, RISK-013/008 helpers, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md`, ADR-023, 5 Phase 9 skeletons | `configure-tools.sh --check/--sync/--self-test` + `validate-versions.sh` pass; all three run offline; GTK4 render + `makepkg`/`namcap` are manual |
+| **9** | Package Repository ✅ | **All 8** PKGBUILDs (57/57 sums), ADR-024 one-owner-per-path + 3 `ar0x-apply-*` helpers, `ar0x-keyring` trust bootstrap, `config/repo/**` policy (12 options), 14 `versions.env` keys, `tools/setup-repo.sh`, `tools/lib/ar0x_repo.py`, 3 GitHub Actions workflows (PR-safe / build / release), `docs/REPO_GUIDE.md`, ADR-024, RISK-051 | `setup-repo.sh --check/--sync/--self-test`, `ar0x_repo.py` (+ `--self-test`), `ar0x_pkgbuild.py`, `validate-versions.sh`, `bash -n`, Python AST, `git diff --check` pass. ⚠️ keygen/signing/publication/`makepkg` are MANUAL; no signed repo exists |
+| **10** | Installer ✅ | Calamares 3.4.3 `settings.conf` (show/exec/show, 3 instances, 22 exec jobs), **21** module configs, ar0x `branding.desc` + `show.qml` + logo mirror, `ar0x-installer-finish` first-boot arming, `pkexec` launcher, `tools/configure-installer.sh`, `tools/lib/ar0x_installer.py`, `docs/INSTALLER_FLOW.md`, ADR-026, RISK-052 | `configure-installer.sh --check/--sync/--self-test` + `ar0x_installer.py` (9 negative tests + REAL helper run), `validate-versions.sh §7k`, `git diff --check` PASS. ⚠️ Full install → reboot → `ar0x-welcome` is a **MANUAL Phase 11 QEMU gate**; GUI never launched here (RISK-052) |
+| **11** | ISO Build & Testing ✅ | `tools/build-iso.sh` (`--check/--sync/--self-test/--preflight/--size-report/--qemu-*/--build`), `tools/checksum.sh` (`--check/--create/--verify/--sign/--self-test`), `tools/lib/ar0x_iso.py`, `config/iso/**` (16 option pins, 8 budget rows, 3 `0755` QEMU launchers), `docs/ISO_BUILD_GUIDE.md`, **40-item** `docs/TESTING_CHECKLIST.md`, ADR-027, RISK-053 | `build-iso.sh --check/--sync/--self-test`, `ar0x_iso.py` (9 negative tests + REAL sparse 2.2 GiB gate), `checksum.sh --self-test` (REAL create/verify/tamper round-trip), `validate-versions.sh §7l`, `git diff --check` PASS. ⚠️ **NO ISO built/booted/hashed/signed** — checklist is 0/40 and all QEMU/hardware items are MANUAL (RISK-053/048/051) |
+| **12** | Release & Distribution ✅ | Real `README.md` (status, verification, docs index), `CHANGELOG.md` UNRELEASED template, `config/release/release-options.conf` (21 pins), `docs/RELEASE_GUIDE.md`, `docs/ANNOUNCEMENT.md`, `docs/DISTROWATCH.md`, `docs/ROADMAP.md`, `tools/prepare-release.sh` (print-only `--publish`), `tools/lib/ar0x_release.py`, ADR-028, RISK-054 | `prepare-release.sh --check/--sync/--self-test`, `ar0x_release.py` (9 negative tests + REAL artifact-set assembly), `validate-versions.sh §7m`, `git diff --check` PASS. ⚠️ **NO tag/upload/announcement/submission** — `PENDING-KEYGEN`, no ISO, checklist 0/40; exit gate `v0.1.0 published with signatures` remains MANUAL (RISK-048/051/053/054) |
+
+---
+
+## 16. v0.1 acceptance criteria
+
+1. `ar0x-0.1.0-x86_64.iso` boots to a Hyprland Wayland session under **both** QEMU UEFI
+   (`-bios OVMF`) and QEMU BIOS (SeaBIOS). ⚠️ **P11 TOOLING COMPLETE, RUNTIME OPEN:**
+   `config/iso/run-qemu-{bios,uefi}.sh` and `docs/TESTING_CHECKLIST.md §D/§E` are
+   delivered and structurally validated, but no ISO or VM exists here (RISK-053).
+2. ISO size ≤ 2.2 GB; `SHA256SUMS` and detached GPG signature verify. ⚠️ The
+   `2362232012`-byte gate is implemented and really tested with sparse files
+   (`ar0x_iso.py --self-test`), `checksum.sh` does a real create/verify/tamper
+   round-trip, but **no real ISO was hashed or signed** (`PENDING-KEYGEN`,
+   RISK-051); `docs/RELEASE_GUIDE.md §2` lists the MANUAL publication gates
+   (RISK-054).
+3. Calamares completes an unattended-default install on a clean virtual disk; the rebooted
+   system reaches `ar0x-welcome` on first login. ⚠️ **P10 CONFIG COMPLETE, RUNTIME
+   OPEN:** the full sequence, branding, package groups, first-boot arming and
+   step-by-step test flow are delivered and structurally validated
+   (`docs/INSTALLER_FLOW.md`), but `calamares` is not yet in the ISO (signed
+   `[ar0x]` repo is `PENDING-KEYGEN`) and no Qt6/Wayland/QEMU install ran here.
+   Remaining gates: MANUAL keygen → publish → `config/packages.x86_64` → QEMU
+   install → reboot → first login (RISK-048/051/052).
+4. WiFi, Bluetooth, audio (PipeWire), GPU acceleration, and screen capture all pass the
+   Phase 11 checklist on at least one real hardware machine. ⚠️ Item **T-34** of
+   `docs/TESTING_CHECKLIST.md` — MANUAL, unchecked (RISK-005/008/009/053).
+5. `fastfetch`, `/etc/os-release`, GRUB, Plymouth, SDDM, and the desktop all show ar0x branding.
+6. `ar0x-update --check` and `ar0x-info` run without root; `ar0x-welcome` links resolve.
+   Phase 8 proof: `./tools/configure-tools.sh --self-test` runs all three offline;
+   live `curl -IL` of the 5 links is a Phase 12 gate (RISK-050).
+7. `pacman -S ar0x-meta` works from the signed `[ar0x]` repo on a stock Arch install.
+   ⚠️ **STILL BLOCKED (RISK-048/051):** Phase 9 delivered all 8 PKGBUILDs and the
+   complete signing/CI tooling, but the offline release key is `PENDING-KEYGEN`,
+   no `makepkg`/`gpg`/`repo-add` ran, no signed db exists, and `repo.ar0x.dev` is
+   a reserved endpoint. Remaining gates: MANUAL `--keygen` → `--sync` → `--build`
+   → `--sign` → Phase 12 publication (see `docs/REPO_GUIDE.md §3`).
+8. Every script passes `bash -n` and `shellcheck`; every script starts with
+   `#!/bin/bash` and `set -euo pipefail`. **Documented exemptions** (they are
+   SOURCED, so strict mode would leak into the parent process):
+   `archiso/profiledef.sh`, `config/system/profile.d/*.sh`,
+   `archiso/airootfs/etc/profile.d/*.sh`, and
+   `config/branding/ascii/ar0x-screenfetch.sh` (sourced by screenFetch 3.9.9).
+   `config/branding/neofetch/config.conf` is a sourced config, not a script.
+   `packages/ar0x-welcome/ar0x-welcome.install` is a SOURCED pacman scriptlet
+   (no shebang / no strict mode); `ar0x-welcome.py` and `ar0x_pkgbuild.py` are
+   Python programs, not shell scripts. The extensionless Phase 8 executables
+   (`ar0x-info`, `ar0x-update`, `ar0x-firstboot`, `ar0x-apparmor-ctl`) are
+   `bash -n` checked by `tools/configure-tools.sh --check`.
+9. **§15 row 12 exit gate:** tag `v0.1.0` published with all 6 artifacts and
+   detached signatures (ADR-029: `tools/build-release.sh --run` now automates
+   steps 1–7 on a real Arch host, but was NOT run here). ⚠️ **NOT MET — MANUAL (RISK-054):** Phase 12 delivered
+   `README.md`, `CHANGELOG.md` (UNRELEASED), 21 release pins, the upload guide,
+   the announcement / DistroWatch / roadmap DRAFTS and a print-only release
+   driver, all offline-validated. But NO tag, GitHub Release, mirror upload,
+   announcement or submission exists; `PENDING-KEYGEN`, no ISO, checklist 0/40.
+   `--publish` NEVER uploads. See `docs/RELEASE_GUIDE.md` (ADR-028).
+
+---
+
+## 17. ✅ PHASE 1 CONFIRMATION GATE
+
+Phase 1 is complete. **Do not start Phase 2 until you confirm.**
+At the gate, please also confirm or override these defaults (§3):
+`x86_64 only`, `Secure Boot supported-but-not-enforced`, `ext4 default`,
+`en_US.UTF-8 / UTC / us keymap`, `quarterly stable cadence`, and the §7
+rule that trimming `linux-firmware` is the *first* size-reduction lever.
+
+---
+
+## Appendix A — verification sources (retrieved 2026-11-03)
+
+- Arch Linux November 2026 ISO / systemd 262.1 / Mesa 26.2.6 / PipeWire 1.6.10 / Qt 6.12 / Python 3.14.9 — <https://linuxiac.com/arch-linux-november-2026-iso-released-with-kernel-7-2-11/>
+- Arch Linux October 2026 ISO / GRUB 2.16 / mkinitcpio 42.1 — <https://linuxiac.com/arch-linux-october-2026-iso-is-out-with-linux-kernel-7-2-7-systemd-262/>
+- `archiso 92-1` package metadata + hard depends + profile `buildmodes`/`bootmodes` — <https://archlinux.org/packages/extra/any/archiso/> , <https://gitlab.archlinux.org/archlinux/packaging/packages/archiso/-/raw/main/PKGBUILD>
+- `hyprland 0.57.0-3` in `[extra]`, `0.57.1-1` in `[extra-testing]` — <https://archlinux.org/packages/extra/x86_64/hyprland/>
+- Calamares 3.4.x Qt6/KF6 dependency set — <https://packages.artixlinux.org/packages/world/x86_64/calamares/>
+- Arch OVMF firmware paths `/usr/share/edk2/x64/OVMF_CODE.4m.fd` — <https://wiki.archlinux.org/title/QEMU>
+- Arch `linux-lts 6.18.59-1` — <https://archlinux.org/packages/core/x86_64/linux-lts/>
+- Linux 6.18 LTS supported until Dec 2027 — <https://9to5linux.com/its-official-linux-kernel-6-18-will-be-lts-supported-until-december-2027>
+- glibc 2.44 / GTK 4.24.1 / Plymouth 26.134.222-2 / SDDM 0.21.0-7 — <https://distrowatch.com/dwres.php?resource=compare-packages>
+- Hyprland `v0.57.1` — GitHub API `https://api.github.com/repos/hyprwm/Hyprland/releases/latest`
+- Hyprland 0.57 removing `.conf` in favour of Lua — <https://www.linuxcompatible.org/story/hyprland-0570-released-legacy-conf-dropped-window-wobble-arrives/> , <https://linuxiac.com/hyprland-0-57-released-with-new-blur-effects-workspace-sharing/>
+- Hyprland ecosystem tags — GitHub API (`hyprwm/hyprlock`, `hypridle`, `hyprpaper`, `hyprpicker`, `hyprcursor`, `xdg-desktop-portal-hyprland`), Waybar `Alexays/Waybar`
+- Calamares 3.4.3 stable + SHA256 + signing key — <https://codeberg.org/Calamares/calamares/releases>
+- archiso 92 profile contract / `mkinitcpio-archiso` and `syslinux` mandatory in-image — <https://gitlab.archlinux.org/archlinux/archiso/-/raw/main/docs/README.profile.rst> , <https://github.com/archlinux/archiso/blob/master/archiso/mkarchiso>
+- Frozen archive repo confirmed live at `https://archive.archlinux.org/repos/2026/11/01/core/os/x86_64/` (serves `core.db`, no `.sig` → `DatabaseOptional` required)
+- Arch `linux-lts` packaging tag `6.18.59-1` (config.x86_64 + 3 maintainer patches) — <https://gitlab.archlinux.org/archlinux/packaging/packages/linux-lts/-/tree/6.18.59-1>
+- GRUB 2 gfxmenu `theme.txt` component syntax — <https://github.com/JonasCardoso/grub-amazing-theme/blob/master/Tela/theme.txt>
+- Plymouth script-plugin theme format — <https://bandel.kendil.com/2021/11/09/plymouth-getting-started-guide/>
+- WirePlumber 0.5+ config locations (moved into the pipewire config dir) — <https://pipewire.pages.freedesktop.org/wireplumber/daemon/configuration/locations.html>
+- systemd `sysusers.d` `m` directive + `systemd.preset` — <https://www.freedesktop.org/software/systemd/man/latest/systemd.preset.html>
+- Arch `linux-lts 6.18.59-1` patch 0001 (`kernel.unprivileged_userns_clone`) — <https://gitlab.archlinux.org/archlinux/packaging/packages/linux-lts/-/raw/6.18.59-1/0001-add-sysctl-to-allow-disabling-unprivileged-CLONE_NEW.patch>
+- Hyprland 0.57 Lua API (`hl.config`, `hl.bind`, `hl.dsp`, `hl.env`, `hl.on`, `require()` module paths) — <https://wiki.hypr.land/configuring/core/> , <https://wiki.hypr.land/configuring/core/binds/> , <https://wiki.hypr.land/configuring/core/environment-variables/>
+- `os-release(5)` `LOGO=` field (added in systemd 252), `CPE_NAME`, `VERSION_CODENAME` rules — <https://www.freedesktop.org/software/systemd/man/latest/os-release.html> , <https://manpages.debian.org/testing/systemd/os-release.5.en.html>
+- `agetty(8)` `/etc/issue` escape whitelist (`\s \m \r \n \l \d \t \v \b \o \u \U`) — <https://www.mankier.com/1/agetty> , <https://gist.github.com/ebta/94bd47a2aeb43f25f573927a14d2b8e4>
+- fastfetch `logo.type = file | file-raw`, `$1`–`$9` colour placeholders, `logo.color`, `padding` — <https://github.com/fastfetch-cli/fastfetch/tree/dev/src/logo/ascii/a> , <https://github.com/fastfetch-cli/fastfetch/discussions/2538> , <https://asciiart.pro/guides/how-to-add-custom-logo-to-fastfetch>
+- fastfetch `doc/json_schema.json` / example presets — <https://github.com/fastfetch-cli/fastfetch/tree/dev/presets/examples>
+- neofetch `image_backend="ascii"` + `image_source="/path/to/ascii"` (Flag `--source`) — <https://github.com/dylanaraps/neofetch> (`neofetch` default-config block); removal from Arch `[extra]` confirmed by a 404 on <https://archlinux.org/packages/extra/any/neofetch/>
+- screenFetch 3.9.9 `-a PATH` custom art contract (`startline`, `logowidth`, `fulloutput[]` with one `%s`) — <https://github.com/KittyKatt/screenFetch> (`screenfetch-dev::asciiText`) , <https://manpages.ubuntu.com/manpages/resolute/man1/screenfetch.1.html>
+- Arch `[extra]` `screenfetch 3.9.9-1` (official) — <https://archlinux.org/packages/?name=screenfetch>
+- Xcursor(3) binary format: magic `Xcur`, header 16, TOC, image chunk `headerSize=36`, type `0xfffd0002`, packed ARGB — <https://www.x.org/releases/X11R7.7/doc/man/man3/Xcursor.3.xhtml> , <https://man.archlinux.org/man/Xcursor.3.en>
+- GRUB 2 gfxmenu `theme.txt` percent-based layout keys — <https://www.gnu.org/software/grub/manual/grub/grub.html#Theme-file-format>
+- Hyprland official 0.57 Lua example config — <https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.lua>
+- hyprpaper `wallpaper { }` blocks, hyprlock colour/widget syntax, hypridle 0.57 Lua DPMS dispatcher — <https://wiki.hypr.land/hypr-ecosystem/user/hyprpaper/> , <https://github.com/hyprwm/hyprlock/blob/main/assets/example.conf> , <https://wiki.hypr.land/hypr-ecosystem/user/hypridle/>
+- SDDM 0.21.0-7 Qt6 greeter, `xorg-server` hard dependency, `sddm.conf(5)` `[Theme] Current=`, QML component property names — <https://archlinux.org/packages/extra/x86_64/sddm/> , <https://github.com/sddm/sddm/tree/develop/components/2.0>
+- Qt5/Qt6 single-platform-theme trick `QT_QPA_PLATFORMTHEME=qt5ct:qt6ct` — <https://wiki.archlinux.org/title/Qt>
+- GTK4/libadwaita `@define-color` overrides and `GTK_THEME` — <https://wiki.archlinux.org/title/GTK>
+- Calamares migration to Codeberg / 3.3.14 archived GitHub mirror — <https://en.wikipedia.org/wiki/Calamares_(software)> , <https://9to5linux.com/calamares-3-4-3-linux-graphical-installer-improves-disk-partitioning-locale>
+- GTK4 PyGObject `Gtk.Application`, `Gtk.CssProvider.load_from_path`, `Gtk.StyleContext.add_provider_for_display`, `Gtk.LinkButton` — <https://api.pygobject.gnome.org/Gtk-4.0/class-CssProvider.html> , <https://docs.gtk.org/gtk4/class.LinkButton.html>
+- GIO `GSubprocess.communicate_utf8_async` / `_finish` for non-blocking output capture — <https://docs.gtk.org/gio/method.Subprocess.communicate_utf8_async.html> , <https://gjs.guide/guides/gio/subprocesses.html>
+- `checkupdates` algorithm (temporary `--dbpath` + symlink to `local` db + `fakeroot pacman -Sy`) — <https://github.com/kyrias/pacman-contrib/blob/master/src/checkupdates.sh.in>
+- `pacman.conf(5)` `SigLevel = Required TrustedOnly` / `Never` / `Optional` / `TrustAll` semantics — <https://manpages.debian.org/testing/pacman-package-manager/pacman.conf.5.en.html>
+- Arch `[extra]` `python-gobject` (PyGObject bindings) — <https://archlinux.org/packages/extra/x86_64/python-gobject>
+- `systemd.unit(5)` `ConditionFirstBoot=`, `ExecCondition=`, `WantedBy=graphical-session.target` — <https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html>

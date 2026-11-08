@@ -1,0 +1,26 @@
+# /home/user/ar0xOS/packages/ar0x-welcome/ar0x-welcome.install
+# -----------------------------------------------------------------------------
+# pacman INSTALL SCRIPTLET (SOURCED by pacman's shell — deliberately NOT a
+# standalone script: no shebang and no `set -euo pipefail`, exactly like the
+# other SOURCED snippets exempted in tools/validate-versions.sh).
+#
+# We create the symlink directly instead of `systemctl --global enable` because
+# scriptlets also run inside a Calamares/pacstrap chroot where no systemd
+# manager or D-Bus is available. The symlink is the exact file that
+# `systemctl --global enable` would create.
+# -----------------------------------------------------------------------------
+_wants=/etc/systemd/user/graphical-session.target.wants
+_unit=/usr/lib/systemd/user/ar0x-welcome.service
+
+post_install() {
+    mkdir -p "$_wants"
+    ln -sfn "$_unit" "$_wants/ar0x-welcome.service"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    rm -f "$_wants/ar0x-welcome.service"
+}

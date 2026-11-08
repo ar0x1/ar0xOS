@@ -1,0 +1,8 @@
+# /home/user/ar0xOS/config/repo/pacman.conf.ar0x-entry
+# PHASE 9 — CANONICAL [ar0x] snippet. Appended to /etc/pacman.conf on
+# a stock Arch install, and to Calamares' target config in Phase 10.
+# Keep the 3 data lines byte-identical to config/pacman.conf.installed;
+# tools/setup-repo.sh --check asserts it. SigLevel = Required is MANDATORY.
+[ar0x]
+SigLevel = Required
+Server = https://repo.ar0x.dev/$arch

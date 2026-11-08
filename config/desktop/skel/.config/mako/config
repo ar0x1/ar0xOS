@@ -1,0 +1,26 @@
+# /etc/skel/.config/mako/config
+# Notification daemon. Waybar does NOT provide notifications, so mako is
+# required for NetworkManager / power / update notifications.
+font=Inter 10
+background-color=#11151FFF
+text-color=#D7E0EEFF
+border-color=#00E5FFFF
+border-size=2
+border-radius=6
+padding=12
+margin=12
+width=380
+max-visible=5
+default-timeout=5000
+ignore-timeout=0
+sort=-time
+layer=overlay
+anchor=top-right
+actions=true
+
+[urgency=high]
+border-color=#FF5C57FF
+default-timeout=0
+
+[urgency=low]
+text-color=#6B7891FF

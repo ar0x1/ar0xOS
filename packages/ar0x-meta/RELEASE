@@ -1,0 +1,25 @@
+ar0x 0.1.0 "ar0x root" — standard experience meta-package
+==========================================================
+
+This package installs NO binaries or configs of its own. It exists solely to
+pull the seven real ar0x packages from the signed [ar0x] repository:
+
+  ar0x-info          /usr/bin/ar0x-info          (fastfetch + ASCII fallback)
+  ar0x-update        /usr/bin/ar0x-update        (non-root signed pacman wrapper)
+  ar0x-welcome       /usr/bin/ar0x-welcome       (GTK4 first-boot assistant)
+  ar0x-theme         /usr/share/ar0x/theme/**    (+ ar0x-apply-theme)
+  ar0x-wallpapers    /usr/share/ar0x/wallpapers/** (+ ar0x-apply-wallpapers)
+  ar0x-hypr-config   /usr/share/ar0x/hypr-config/** (+ ar0x-apply-hypr-config)
+  ar0x-keyring       /usr/share/pacman/keyrings/ar0x*.{gpg,trusted,revoked}
+
+⚠️ ONE OWNER PER PATH (ADR-024): on a stock Arch install the config packages
+ship REFERENCE trees plus `ar0x-apply-*` helpers; the ar0x ISO gets the same
+files from the Phase 6/7 airootfs overlay instead. No path has two owners, so
+`pacman -U` can never report "conflicting files".
+
+Verify the release key fingerprint out of band before trusting the repo:
+  pacman-key --finger <fingerprint from config/repo/RELEASE_KEY_FINGERPRINT>
+  sudo pacman-key --populate ar0x
+  sudo pacman -S ar0x-meta
+
+Full guide: /home/user/ar0xOS/docs/REPO_GUIDE.md

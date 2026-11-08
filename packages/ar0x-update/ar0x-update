@@ -1,0 +1,494 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/bin/ar0x-update  (SOURCE: /home/user/ar0xOS/packages/ar0x-update/ar0x-update)
+# -----------------------------------------------------------------------------
+# PHASE 8 — safe, non-root pacman wrapper for ar0x.
+#
+# SECURITY CONTRACT (PROJECT_PLAN.md §9):
+#   * REFUSES to run as bare root. Call it as a normal user; the tool escalates
+#     ONLY the `pacman -Syu` step through pkexec/sudo. This keeps the untrusted
+#     parsing/network code out of a root process.
+#   * VERIFIES the [ar0x] repository metadata signature before reporting
+#     updates: an isolated `pacman -Sy` against a generated pacman.conf that
+#     contains ONLY [ar0x] with SigLevel = Required. pacman itself checks the
+#     detached ar0x.db.sig. `SigLevel = Never/Optional/TrustAll` is rejected.
+#   * NEVER uses -Sy alone (partial upgrade), --noconfirm, --overwrite or -d.
+#   * --rollback lists real cached tarballs from /var/log/pacman.log so a bad
+#     upgrade can be reverted with an exact `pacman -U <path>` command.
+#
+# MODES
+#   --check       (default) no root, no writes to the system db. Verify the
+#                 [ar0x] db signature, then list pending updates using the
+#                 well-known `checkupdates` algorithm (temporary --dbpath).
+#   --verify-repo no root. Only the isolated signature/metadata check.
+#   --rollback    no root. Print the last N upgrades + cached old tarballs.
+#   --status      no root, no network. Print effective config + capability map.
+#   --upgrade     ⚠️ RISKY. Escalate ONE command via pkexec/sudo. Requires an
+#                 interactive `yes`. NEVER run unattended on a real machine.
+#   --self-test   no root, no network, no pacman: stubbed unit checks.
+#
+# TEST HOOKS (documented in docs/TOOLS_GUIDE.md §6): AR0X_UPDATE_CONF,
+# AR0X_UPDATE_PACMAN_CONF, AR0X_UPDATE_PACMAN_LOG, AR0X_UPDATE_PACMAN_BIN,
+# AR0X_UPDATE_FAKEROOT_BIN, AR0X_UPDATE_PACMANCONF_BIN, AR0X_UPDATE_CURL_BIN,
+# AR0X_UPDATE_CACHE_DIR. They exist so this wrapper can be tested on a
+# non-Arch CI image; production uses the compiled-in defaults.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: constants and injectable commands ----------------------------
+# These path variables are deliberately NOT readonly: --self-test rebinds them
+# to stub binaries so the whole wrapper can be exercised on a non-Arch CI host.
+readonly AR0X_UPDATE_VERSION='0.1.0'
+CONF_FILE="${AR0X_UPDATE_CONF:-/etc/ar0x/update.conf}"
+PACMAN_CONF="${AR0X_UPDATE_PACMAN_CONF:-/etc/pacman.conf}"
+PACMAN_LOG="${AR0X_UPDATE_PACMAN_LOG:-/var/log/pacman.log}"
+CACHE_DIR="${AR0X_UPDATE_CACHE_DIR:-/var/cache/pacman/pkg}"
+PACMAN_BIN="${AR0X_UPDATE_PACMAN_BIN:-pacman}"
+FAKEROOT_BIN="${AR0X_UPDATE_FAKEROOT_BIN:-fakeroot}"
+PACMANCONF_BIN="${AR0X_UPDATE_PACMANCONF_BIN:-pacman-conf}"
+CURL_BIN="${AR0X_UPDATE_CURL_BIN:-curl}"
+
+# Defaults are set BEFORE sourcing the config, so `set -u` can never trip on a
+# config file that omits a key. `update.conf` is a plain KEY=value file.
+AR0X_UPDATE_REPO='ar0x'
+AR0X_UPDATE_SIGLEVEL='Required'
+AR0X_UPDATE_BACKEND='pkexec'
+AR0X_UPDATE_PACMAN_ARGS='-Syu'
+AR0X_UPDATE_KEEP_CACHED='3'
+AR0X_UPDATE_ROLLBACK_LIMIT='20'
+AR0X_UPDATE_CONFIRM='yes'
+AR0X_UPDATE_SYNC_TIMEOUT='120'
+AR0X_UPDATE_REPO_FILTER=''
+
+# --- Section 2: logging ------------------------------------------------------
+err()  { printf 'ar0x-update: ERROR: %s\n' "$*" >&2; }
+warn() { printf 'ar0x-update: ⚠️  %s\n' "$*" >&2; }
+note() { printf 'ar0x-update: %s\n' "$*" >&2; }
+ok()   { printf '[ OK ] %s\n' "$*"; }
+die()  { err "$*"; exit 1; }
+
+usage() {
+    cat <<'USAGE'
+ar0x-update 0.1.0 — safe pacman wrapper (must run as a NORMAL USER)
+
+Usage: ar0x-update [MODE]
+
+  --check        Verify [ar0x] db signature, then list pending updates. (default)
+  --verify-repo  Only the isolated [ar0x] metadata signature check.
+  --rollback     List recent upgrades and the cached old tarballs for revert.
+  --status       Show effective config and detected binaries (no network).
+  --upgrade      ⚠️ Escalate ONE `pacman -Syu` via pkexec/sudo. Requires an
+                 interactive `yes`. Rebuilds nothing, but CAN break a system:
+                 read docs/TOOLS_GUIDE.md §5 before using it.
+  --self-test    Stubbed unit checks; no root, no pacman, no network.
+  --version      Print version.
+  --help         This help.
+
+`ar0x-update` refuses to run as root by design. If you are root, use:
+  runuser -u <your-user> -- ar0x-update --check
+
+Config: /etc/ar0x/update.conf (backup=() in the PKGBUILD).
+USAGE
+}
+
+# --- Section 3: config loading and validation --------------------------------
+load_config() {
+    if [[ -r "$CONF_FILE" ]]; then
+        # shellcheck source=/dev/null
+        source "$CONF_FILE" || die "Failed to parse ${CONF_FILE}."
+    else
+        warn "${CONF_FILE} not readable; using compiled-in defaults."
+    fi
+    assert_config
+}
+
+assert_config() {
+    [[ "$AR0X_UPDATE_REPO" =~ ^[A-Za-z0-9_.-]+$ ]] \
+        || die "AR0X_UPDATE_REPO must be a plain repo name (got '${AR0X_UPDATE_REPO}')."
+    [[ "$AR0X_UPDATE_SIGLEVEL" == 'Required' || "$AR0X_UPDATE_SIGLEVEL" == 'Required TrustedOnly' ]] \
+        || die "AR0X_UPDATE_SIGLEVEL must be 'Required' (got '${AR0X_UPDATE_SIGLEVEL}')."
+    case "$AR0X_UPDATE_BACKEND" in pkexec|sudo|none) ;; *) die "AR0X_UPDATE_BACKEND must be pkexec|sudo|none." ;; esac
+    [[ "$AR0X_UPDATE_KEEP_CACHED" =~ ^[0-9]+$ ]] || die 'AR0X_UPDATE_KEEP_CACHED must be an integer.'
+    [[ "$AR0X_UPDATE_ROLLBACK_LIMIT" =~ ^[0-9]+$ ]] || die 'AR0X_UPDATE_ROLLBACK_LIMIT must be an integer.'
+    [[ "$AR0X_UPDATE_SYNC_TIMEOUT" =~ ^[0-9]+$ ]] || die 'AR0X_UPDATE_SYNC_TIMEOUT must be an integer.'
+    case "$AR0X_UPDATE_CONFIRM" in yes|no) ;; *) die 'AR0X_UPDATE_CONFIRM must be yes|no.' ;; esac
+    assert_safe_pacman_args "$AR0X_UPDATE_PACMAN_ARGS"
+}
+
+assert_safe_pacman_args() {
+    local args="$1" a
+    # Split on whitespace WITHOUT eval. Only -Syu / -Syuu style full upgrades.
+    local -a arr=(); read -r -a arr <<< "$args"
+    [[ ${#arr[@]} -gt 0 ]] || die 'AR0X_UPDATE_PACMAN_ARGS is empty.'
+    for a in "${arr[@]}"; do
+        case "$a" in
+            --noconfirm|--overwrite|-d|--dbonly|--nodeps|--force|-Sy|-Syy|-Syyu)
+                die "Refusing unsafe pacman argument '${a}' (partial upgrade or blind overwrite)." ;;
+        esac
+    done
+    [[ "$args" == *-Syu* || "$args" == *-Syuu* ]] \
+        || die "AR0X_UPDATE_PACMAN_ARGS must be a FULL upgrade (-Syu), got '${args}'."
+}
+
+assert_not_root() {
+    if (( EUID == 0 )); then
+        die "Refusing to run as bare root. Use: runuser -u <user> -- ar0x-update $*"
+    fi
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 \
+        || die "Required command not found: $1  (install ${2:-$1} on an Arch host)."
+}
+
+# --- Section 4: pacman.conf parsing ------------------------------------------
+# Returns the effective SigLevel for a repo: the repo's own line, else the
+# [options] global, else "". Pure awk so NO shell expansion of pacman.conf.
+repo_siglevel() {
+    local conf="$1" repo="$2"
+    [[ -r "$conf" ]] || { printf '%s' ''; return 0; }
+    awk -v want="$repo" '
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*\[/ {
+            sec = $0
+            sub(/^[[:space:]]*\[/, "", sec)
+            sub(/\].*$/, "", sec)
+            inrepo = (sec == want); inopt = (sec == "options"); next
+        }
+        inrepo && /^[[:space:]]*SigLevel[[:space:]]*=/ {
+            v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); found = v
+        }
+        inopt && /^[[:space:]]*SigLevel[[:space:]]*=/ {
+            g = $0; sub(/^[^=]*=[[:space:]]*/, "", g); global = g
+        }
+        END { if (found != "") print found; else if (global != "") print global; else print "" }
+    ' "$conf"
+}
+
+# Returns the Server lines belonging to one repo, one per line.
+repo_servers() {
+    local conf="$1" repo="$2"
+    awk -v want="$repo" '
+        /^[[:space:]]*\[/ {
+            sec = $0
+            sub(/^[[:space:]]*\[/, "", sec); sub(/\].*$/, "", sec)
+            inrepo = (sec == want); next
+        }
+        inrepo && /^[[:space:]]*#/ { next }
+        inrepo && /^[[:space:]]*Server[[:space:]]*=/ { print $0 }
+    ' "$conf"
+}
+
+assert_safe_siglevel() {
+    local conf="${1:-$PACMAN_CONF}" repo="${2:-$AR0X_UPDATE_REPO}" lvl
+    lvl="$(repo_siglevel "$conf" "$repo")"
+    [[ -n "$lvl" ]] \
+        || die "No SigLevel found for [${repo}] in ${conf}. Refusing to check unsigned metadata."
+    if printf '%s' "$lvl" | grep -Eq '(^|[[:space:]])(Never|Optional|TrustAll|PackageOptional|DatabaseOptional|PackageNever|DatabaseNever|PackageTrustAll|DatabaseTrustAll)([[:space:]]|$)'; then
+        die "Insecure SigLevel for [${repo}]: '${lvl}'. MUST be 'Required' (RISK-010 / §9)."
+    fi
+    printf '%s' "$lvl" | grep -Eq '(^|[[:space:]])Required([[:space:]]|$)' \
+        || die "SigLevel for [${repo}] lacks 'Required': '${lvl}'."
+    printf '[ OK ] [%s] SigLevel = %s (signed metadata enforced)\n' "$repo" "$lvl"
+}
+
+# --- Section 5: isolated [ar0x] metadata signature verification --------------
+# Build a pacman.conf with ONLY [ar0x] and SigLevel=Required, then `pacman -Sy`
+# into a private dbpath. pacman downloads ar0x.db AND ar0x.db.sig and verifies
+# the detached signature with the pacman keyring. An unsigned/tampered db makes
+# this command FAIL, which is exactly the gate we want.
+verify_repo_metadata() {
+    local conf="${1:-$PACMAN_CONF}" repo="${2:-$AR0X_UPDATE_REPO}" tmp isolated servers
+    need "$PACMAN_BIN" pacman
+    need "$FAKEROOT_BIN" fakeroot
+    servers="$(repo_servers "$conf" "$repo")"
+    [[ -n "$servers" ]] || die "No Server line for [${repo}] in ${conf}."
+    tmp="$(mktemp -d)"
+    mkdir -p -- "$tmp/db" "$tmp/cache"
+    isolated="$tmp/pacman.conf"
+    {
+        printf '[options]\n'
+        printf 'Architecture = x86_64\n'
+        printf 'DBPath = %s/db\n' "$tmp"
+        printf 'CacheDir = %s/cache\n' "$tmp"
+        printf 'LogFile = %s/pacman.log\n' "$tmp"
+        printf 'SigLevel = Required TrustedOnly\n'
+        printf '\n[%s]\n' "$repo"
+        printf 'SigLevel = Required\n'
+        printf '%s\n' "$servers"
+    } > "$isolated"
+    if ! "$FAKEROOT_BIN" -- "$PACMAN_BIN" -Sy --dbpath "$tmp/db" \
+            --config "$isolated" --logfile /dev/null >/dev/null 2>&1; then
+        rm -rf -- "$tmp"
+        die "[${repo}] repository metadata signature check FAILED. Do NOT upgrade; verify the pacman keyring and the signed ar0x.db.sig (Phase 9)."
+    fi
+    rm -rf -- "$tmp"
+    printf '[ OK ] [%s] ar0x.db.sig verified by pacman (isolated dbpath)\n' "$repo"
+}
+
+# --- Section 6: pending-update list (checkupdates algorithm) ----------------
+# `checkupdates` from pacman-contrib does exactly this: a temporary --dbpath,
+# symlinked to the real local db, refreshed with -Sy under fakeroot. We inline
+# it so there is NO extra runtime dependency and so our SigLevel assertion runs
+# FIRST. It never touches /var/lib/pacman/sync, so no partial upgrade.
+check_updates() {
+    local conf="${1:-$PACMAN_CONF}" tmp dbpath localdb out
+    need "$PACMAN_BIN" pacman
+    need "$FAKEROOT_BIN" fakeroot
+    tmp="$(mktemp -d)"; dbpath="$tmp/db"
+    mkdir -p -- "$dbpath"
+    if command -v "$PACMANCONF_BIN" >/dev/null 2>&1; then
+        localdb="$("$PACMANCONF_BIN" DBPath 2>/dev/null || printf '/var/lib/pacman')"
+    else
+        localdb='/var/lib/pacman'
+    fi
+    [[ -d "${localdb%/}/local" ]] && ln -s -- "${localdb%/}/local" "$dbpath/local"
+    if ! "$FAKEROOT_BIN" -- "$PACMAN_BIN" -Sy --dbpath "$dbpath" \
+            --config "$conf" --logfile /dev/null >/dev/null 2>&1; then
+        rm -rf -- "$tmp"
+        die 'pacman -Sy into the temporary dbpath failed (network / mirror / signature).'
+    fi
+    out="$("$PACMAN_BIN" -Qu --dbpath "$dbpath" --config "$conf" 2>/dev/null \
+            | grep -v '^\[' || true)"
+    rm -rf -- "$tmp"
+    printf '%s' "$out"
+}
+
+# --- Section 7: rollback list ------------------------------------------------
+# /var/log/pacman.log lines look like:
+#   2026-11-07T09:12:33 [ALPM] upgraded foo (1.2.0-1 -> 1.3.0-1)
+# We print the OLD version and whether its tarball is still in the cache.
+rollback_list() {
+    local log="${1:-$PACMAN_LOG}" limit="${2:-$AR0X_UPDATE_ROLLBACK_LIMIT}" rows
+    [[ -r "$log" ]] || die "Cannot read ${log}. Run 'sudo chmod a+r ${log}' or point AR0X_UPDATE_PACMAN_LOG at a copy."
+    rows="$(awk '
+        /\[ALPM\] upgraded / {
+            ts = $1
+            s = $0; sub(/^.*\[ALPM\] upgraded /, "", s)
+            name = s; sub(/ \(.*/, "", name)
+            old = s; sub(/^[^ ]* \(/, "", old); sub(/ -> .*/, "", old)
+            printf "%s\t%s\t%s\n", ts, name, old
+        }
+    ' "$log" | tail -n "$limit")"
+    if [[ -z "$rows" ]]; then
+        note 'No [ALPM] upgraded entries found; nothing to roll back.'
+        return 0
+    fi
+    printf '%-20s %-32s %-20s %s\n' 'WHEN' 'PACKAGE' 'OLD VERSION' 'CACHED TARBALL'
+    local ts name old cand
+    while IFS=$'\t' read -r ts name old; do
+        cand=''
+        for f in "${CACHE_DIR}/${name}-${old}-"*.pkg.tar.zst; do
+            if [[ -f "$f" ]]; then cand="$f"; break; fi
+        done
+        if [[ -n "$cand" ]]; then
+            printf '%-20s %-32s %-20s %s\n' "$ts" "$name" "$old" "$cand"
+        else
+            printf '%-20s %-32s %-20s %s\n' "$ts" "$name" "$old" '(not in cache)'
+        fi
+    done <<< "$rows"
+    cat <<'HINT'
+
+To revert ONE package (example):
+  sudo pacman -U /var/cache/pacman/pkg/<name>-<old-version>-x86_64.pkg.tar.zst
+⚠️ Downgrading a library can break its dependants. Prefer a full `pacman -Syu`
+   to the next fixed release; downgrade only as a short-term escape hatch.
+HINT
+}
+
+# --- Section 8: --upgrade (the ONLY risky path) -----------------------------
+do_upgrade() {
+    local -a pargs=()
+    read -r -a pargs <<< "$AR0X_UPDATE_PACMAN_ARGS"
+    warn '⚠️  YOU ARE ABOUT TO RUN A FULL SYSTEM UPGRADE.'
+    warn '    This can replace the kernel, glibc, GPU drivers and bootloader files.'
+    warn '    It needs a working network, free disk space and a backup. There is NO automatic rollback.'
+    warn '    pacman will show the full transaction and ask for confirmation itself.'
+    if [[ "$AR0X_UPDATE_CONFIRM" == 'yes' ]]; then
+        local ans=''
+        if [[ -t 0 ]]; then
+            read -r -p "Type 'yes' to continue: " ans || true
+        else
+            warn 'No interactive TTY detected. Re-run from a terminal (or set AR0X_UPDATE_CONFIRM=no for a disposable VM).'
+            ans='no'
+        fi
+        [[ "$ans" == 'yes' ]] || { note 'Aborted by user.'; return 0; }
+    fi
+    case "$AR0X_UPDATE_BACKEND" in
+        pkexec) need pkexec polkit; printf 'Executing: pkexec %s %s\n' "$PACMAN_BIN" "${pargs[*]}"; exec pkexec "$PACMAN_BIN" "${pargs[@]}" ;;
+        sudo)   need sudo sudo;    printf 'Executing: sudo %s %s\n' "$PACMAN_BIN" "${pargs[*]}"; exec sudo "$PACMAN_BIN" "${pargs[@]}" ;;
+        none)
+            printf 'AR0X_UPDATE_BACKEND=none — command NOT executed:\n'
+            printf '  %s %s\n' "$PACMAN_BIN" "${pargs[*]}"
+            ;;
+    esac
+}
+
+# --- Section 9: --status (no network, no root) -------------------------------
+show_status() {
+    printf 'ar0x-update %s  (effective configuration)\n' "$AR0X_UPDATE_VERSION"
+    printf '  config file       : %s %s\n' "$CONF_FILE" "$([[ -r "$CONF_FILE" ]] && printf '(readable)' || printf '(defaults)')"
+    printf '  pacman.conf       : %s\n' "$PACMAN_CONF"
+    printf '  repo              : %s\n' "$AR0X_UPDATE_REPO"
+    printf '  required SigLevel : %s\n' "$AR0X_UPDATE_SIGLEVEL"
+    printf '  effective SigLevel: %s\n' "$(repo_siglevel "$PACMAN_CONF" "$AR0X_UPDATE_REPO")"
+    printf '  backend           : %s\n' "$AR0X_UPDATE_BACKEND"
+    printf '  upgrade args      : %s\n' "$AR0X_UPDATE_PACMAN_ARGS"
+    printf '  keep cached       : %s\n' "$AR0X_UPDATE_KEEP_CACHED"
+    printf '  rollback limit    : %s\n' "$AR0X_UPDATE_ROLLBACK_LIMIT"
+    printf '  interactive conf. : %s\n' "$AR0X_UPDATE_CONFIRM"
+    printf '  sync timeout      : %ss\n' "$AR0X_UPDATE_SYNC_TIMEOUT"
+    printf '  repo filter       : %s\n' "${AR0X_UPDATE_REPO_FILTER:-<all>}"
+    printf '  binaries          : pacman=%s fakeroot=%s pacman-conf=%s curl=%s\n' \
+        "$(command -v "$PACMAN_BIN" >/dev/null 2>&1 && printf yes || printf no)" \
+        "$(command -v "$FAKEROOT_BIN" >/dev/null 2>&1 && printf yes || printf no)" \
+        "$(command -v "$PACMANCONF_BIN" >/dev/null 2>&1 && printf yes || printf no)" \
+        "$(command -v "$CURL_BIN" >/dev/null 2>&1 && printf yes || printf no)"
+    printf '  euid              : %s (must NOT be 0)\n' "$EUID"
+}
+
+# --- Section 10: --self-test (stubbed, offline) ------------------------------
+self_test() {
+    local tmp mock_conf bad_conf mock_log
+    tmp="$(mktemp -d)"
+    # 10a. Build mock helper binaries.
+    cat > "$tmp/pacman" <<'MOCK'
+#!/bin/bash
+# Mock pacman: -Sy succeeds (pretends signature verified); -Qu emits 2 updates.
+for a in "$@"; do
+    [[ "$a" == '-Qu' ]] && { printf 'hyprland 0.57.1-1 -> 0.58.0-1\n'; printf 'linux-lts 6.18.59-1 -> 6.18.60-1\n'; }
+done
+exit 0
+MOCK
+    cat > "$tmp/fakeroot" <<'MOCK'
+#!/bin/bash
+[[ "${1:-}" == '--' ]] && shift
+exec "$@"
+MOCK
+    cat > "$tmp/pacman-conf" <<'MOCK'
+#!/bin/bash
+printf '%s\n' /var/lib/pacman
+MOCK
+    chmod 0755 -- "$tmp/pacman" "$tmp/fakeroot" "$tmp/pacman-conf"
+    PACMAN_BIN="$tmp/pacman"
+    FAKEROOT_BIN="$tmp/fakeroot"
+    PACMANCONF_BIN="$tmp/pacman-conf"
+    # 10b. A good and three BAD pacman.conf files.
+    mock_conf="$tmp/pacman.conf"
+    cat > "$mock_conf" <<'CONF'
+[options]
+SigLevel = Required TrustedOnly
+[ar0x]
+SigLevel = Required
+Server = https://repo.ar0x.dev/$arch
+[core]
+Include = /etc/pacman.d/mirrorlist
+CONF
+    PACMAN_CONF="$mock_conf"
+    [[ "$(repo_siglevel "$mock_conf" ar0x)" == 'Required' ]] || die 'repo_siglevel did not read the [ar0x] line'
+    assert_safe_siglevel "$mock_conf" ar0x >/dev/null
+    printf '[ OK ] repo_siglevel / assert_safe_siglevel on a valid pacman.conf\n'
+    for bad in 'Never' 'Optional TrustAll' 'Required PackageOptional' 'Required DatabaseNever'; do
+        bad_conf="$tmp/bad.conf"
+        { printf '[options]\nSigLevel = Required TrustedOnly\n[ar0x]\nSigLevel = %s\nServer = https://repo.ar0x.dev/$arch\n' "$bad"; } > "$bad_conf"
+        if ( assert_safe_siglevel "$bad_conf" ar0x ) >/dev/null 2>&1; then
+            rm -rf -- "$tmp"; die "Insecure SigLevel '${bad}' was accepted!"
+        fi
+    done
+    printf '[ OK ] 4 insecure SigLevel variants rejected (Never/Optional/TrustAll/*Optional/*Never)\n'
+    # 10c. The global [options] fallback must work when a repo has no own line.
+    cat > "$bad_conf" <<'CONF'
+[options]
+SigLevel = Required TrustedOnly
+[ar0x]
+Server = https://repo.ar0x.dev/$arch
+CONF
+    [[ "$(repo_siglevel "$bad_conf" ar0x)" == 'Required TrustedOnly' ]] || die '[options] SigLevel fallback broken'
+    printf '[ OK ] [options] SigLevel fallback works\n'
+    # 10d. Unsafe pacman args must be rejected.
+    for bad in '-Sy' '-Syu --noconfirm' '-Syu --overwrite *' '-Syu -d'; do
+        if ( assert_safe_pacman_args "$bad" ) >/dev/null 2>&1; then rm -rf -- "$tmp"; die "Unsafe args accepted: ${bad}"; fi
+    done
+    assert_safe_pacman_args '-Syu' >/dev/null
+    printf '[ OK ] unsafe pacman arguments rejected; -Syu accepted\n'
+    # 10e. Isolated metadata verification + pending list with mocks.
+    verify_repo_metadata "$mock_conf" ar0x >/dev/null
+    printf '[ OK ] verify_repo_metadata (isolated dbpath + Required) with mock pacman\n'
+    local pending=''
+    pending="$(check_updates "$mock_conf")"
+    printf '%s' "$pending" | grep -Fq 'hyprland 0.57.1-1 -> 0.58.0-1' || { rm -rf -- "$tmp"; die 'check_updates output missing hyprland'; }
+    printf '%s' "$pending" | grep -Fq 'linux-lts 6.18.59-1 -> 6.18.60-1' || { rm -rf -- "$tmp"; die 'check_updates output missing linux-lts'; }
+    printf '[ OK ] check_updates returned 2 pending updates via temporary dbpath\n'
+    # 10f. Rollback parser finds the OLD version and the cached tarball.
+    mock_log="$tmp/pacman.log"
+    cat > "$mock_log" <<'LOG'
+[2026-11-01T10:00:00] [PACMAN] synchronizing package lists
+[2026-11-01T10:01:00] [ALPM] transaction started
+[2026-11-01T10:01:01] [ALPM] upgraded foo (1.2.0-1 -> 1.3.0-1)
+[2026-11-01T10:01:02] [ALPM] upgraded bar (2.0-1 -> 2.1-1)
+[2026-11-01T10:01:03] [ALPM] transaction completed
+LOG
+    PACMAN_LOG="$mock_log"
+    CACHE_DIR="$tmp/cache"
+    mkdir -p -- "$tmp/cache"
+    : > "$tmp/cache/foo-1.2.0-1-x86_64.pkg.tar.zst"
+    local rb=''
+    rb="$(rollback_list "$mock_log" 20)"
+    printf '%s' "$rb" | grep -Fq 'foo-1.2.0-1-x86_64.pkg.tar.zst' || { rm -rf -- "$tmp"; die 'rollback did not find cached old tarball'; }
+    printf '%s' "$rb" | grep -Fq '(not in cache)' || { rm -rf -- "$tmp"; die 'rollback did not mark the missing tarball'; }
+    printf '[ OK ] rollback_list parsed old versions + cache availability\n'
+    # 10g. Config validation: defaults must be safe.
+    load_config >/dev/null 2>&1 || true
+    assert_config
+    printf '[ OK ] compiled-in defaults pass assert_config\n'
+    rm -rf -- "$tmp"
+    printf '[ OK ] ar0x-update --self-test PASSED\n'
+}
+
+# --- Section 11: dispatch ----------------------------------------------------
+MODE='check'
+while (( $# > 0 )); do
+    case "$1" in
+        --check)        MODE='check' ;;
+        --verify-repo)  MODE='verify' ;;
+        --rollback)     MODE='rollback' ;;
+        --status)       MODE='status' ;;
+        --upgrade)      MODE='upgrade' ;;
+        --self-test)    MODE='selftest' ;;
+        --version)      printf 'ar0x-update %s\n' "$AR0X_UPDATE_VERSION"; exit 0 ;;
+        -h|--help)      usage; exit 0 ;;
+        *)              die "Unknown option: $1 (try --help)." ;;
+    esac
+    shift
+done
+
+# --self-test is the ONLY mode that may run without loading the real config,
+# because it installs its own mocks first.
+if [[ "$MODE" == 'selftest' ]]; then
+    assert_not_root '--self-test'
+    self_test
+    exit 0
+fi
+
+assert_not_root "--${MODE}"
+load_config
+
+case "$MODE" in
+    status)   show_status ;;
+    rollback) rollback_list ;;
+    upgrade)  assert_safe_siglevel; do_upgrade ;;
+    verify)   assert_safe_siglevel; verify_repo_metadata ;;
+    check)
+        assert_safe_siglevel
+        verify_repo_metadata
+        pending="$(check_updates)"
+        if [[ -z "$pending" ]]; then
+            ok 'No pending updates. Your system is up to date.'
+        else
+            count="$(printf '%s\n' "$pending" | wc -l | tr -d '[:space:]')"
+            printf '\n%s pending update(s):\n%s\n' "$count" "$pending"
+            printf '\nTo apply them: ar0x-update --upgrade  (⚠️ review docs/TOOLS_GUIDE.md §5 first)\n'
+        fi
+        ;;
+esac

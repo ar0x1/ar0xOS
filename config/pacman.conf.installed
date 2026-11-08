@@ -1,0 +1,39 @@
+# /home/user/ar0xOS/config/pacman.conf.installed
+# -----------------------------------------------------------------------------
+# PHASE 5 — /etc/pacman.conf for the INSTALLED system (Calamares target disk).
+#
+# ⚠️ RISK-006: this file MUST NOT contain archive.archlinux.org. Contrast with
+#    config/pacman.conf.build, which is the FROZEN build-only config used by
+#    mkarchiso. Shipping the frozen config to users would pin them to
+#    2026-11-01 packages forever. Both validators assert this separation.
+#
+# Rolling [core]/[extra] come from /etc/pacman.d/mirrorlist, which Calamares
+# generates with reflector during install (Phase 10).
+# -----------------------------------------------------------------------------
+[options]
+Architecture = x86_64
+HoldPkg      = pacman glibc
+SigLevel     = Required DatabaseOptional
+LocalFileSigLevel = Optional
+ParallelDownloads = 5
+Color
+CheckSpace
+VerbosePkgLists
+
+# --- [ar0x] custom repository ------------------------------------------------
+# ⚠️ MANUAL (Phase 9/12): repo.ar0x.dev is the RESERVED release endpoint.
+#    tools/setup-repo.sh builds the signed db with `repo-add -s` and Phase 12
+#    publishes it (GitHub Pages / mirror). Until DNS+upload are live,
+#    `pacman -Syu` will report a failed sync for this one repo; the rolling
+#    Arch repos still work. Do NOT disable signature checking to work around it.
+[ar0x]
+SigLevel = Required
+Server = https://repo.ar0x.dev/$arch
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+# [multilib] is intentionally absent: ar0x v0.1 is x86_64-only (Phase 1).

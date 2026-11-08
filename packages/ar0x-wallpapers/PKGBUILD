@@ -1,0 +1,56 @@
+# /home/user/ar0xOS/packages/ar0x-wallpapers/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 9 — wallpapers + brand vector masters + user applier (ADR-024).
+# ⚠️ MUST NOT install into /usr/share/backgrounds/ar0x/**, /usr/share/plymouth/**,
+#    /usr/share/grub/**, /usr/share/sddm/** or the hicolor ar0x-logo icon:
+#    every one of those is already owned by the Phase 7 airootfs overlay.
+#    One owner per path, otherwise `pacman -U` reports conflicting files.
+# The three PNGs are licence-clean deterministic 4K art (ADR-021/022); the
+# SVG masters and LICENSE are CC BY-SA 4.0 from assets/logo/**.
+# -----------------------------------------------------------------------------
+pkgname=ar0x-wallpapers
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ar0x 4K wallpapers, SVG logo masters and boot-art references + user applier"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('CC-BY-SA-4.0')
+depends=('bash' 'coreutils')
+optdepends=('hyprpaper: apply the wallpapers on Wayland')
+source=(
+    'ar0x-grid.png'
+    'ar0x-void.png'
+    'ar0x-circuit.png'
+    'ar0x-logo.svg'
+    'ar0x-logo-mono.svg'
+    'ar0x-wordmark.svg'
+    'LICENSE'
+    'theme.txt'
+    'Main.qml'
+    'ar0x-apply-wallpapers'
+)
+sha256sums=(
+    '7a0c4651a817d7fa40f9dd7fe92c8cd4a539534da08d99094e10d7485557b247'
+    '07b8dfdabbf203ebab70e55e8a7fdf74090ca305a4cea965d453d2d0ed56aec5'
+    '0a4351d7a5b6f4a653b802280ef2e6323b5ce4055c59cb7c66320e30522f3b58'
+    'ca048bb9a9b95c6f15556799bf9d402db1ec2c7a53c29e51389750513fa109c6'
+    '599b3f20a65d82486b00660a479d1d69caa19c0ff11efb314b1c9e77099c8daf'
+    '5884446b0149b1c9c404ff251ab16cfc96e06b737ea80918e9e223ffc1b49bb7'
+    '83afe167a3764f40be4ec28692a88f501012b1916da2110e7f5f92d19e2dc389'
+    '59494a1ec4cc15baaa14659c60dc6f7b8bfef4a40445a3efd36892c9ece0431c'
+    '9301eab99fa649e3efd9c0ae342b727f06f6cfdce66c1317db60bc48f2a7b5f4'
+    'cdf014eb44cbeac48d6195bef66fee23fc968cbda2832e9e8dc5e3366e14fa91'
+)
+
+package() {
+    install -Dm644 "$srcdir/ar0x-grid.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-grid.png"
+    install -Dm644 "$srcdir/ar0x-void.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-void.png"
+    install -Dm644 "$srcdir/ar0x-circuit.png" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-circuit.png"
+    install -Dm644 "$srcdir/ar0x-logo.svg" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-logo.svg"
+    install -Dm644 "$srcdir/ar0x-logo-mono.svg" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-logo-mono.svg"
+    install -Dm644 "$srcdir/ar0x-wordmark.svg" "$pkgdir/usr/share/ar0x/wallpapers/ar0x-wordmark.svg"
+    install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/ar0x/wallpapers/LICENSE"
+    install -Dm644 "$srcdir/theme.txt" "$pkgdir/usr/share/ar0x/wallpapers/theme.txt"
+    install -Dm644 "$srcdir/Main.qml" "$pkgdir/usr/share/ar0x/wallpapers/Main.qml"
+    install -Dm755 "$srcdir/ar0x-apply-wallpapers" "$pkgdir/usr/bin/ar0x-apply-wallpapers"
+}

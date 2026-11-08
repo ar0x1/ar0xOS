@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ar0x Update Check
+GenericName=Check for Updates
+Comment=Verify the signed [ar0x] repository and list pending updates (read-only)
+Exec=/usr/bin/ar0x-update --check
+Icon=system-software-update
+Terminal=true
+StartupNotify=false
+Categories=System;Utility;
+Keywords=ar0x;update;pacman;check;

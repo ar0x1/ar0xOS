@@ -1,0 +1,69 @@
+# /home/user/ar0xOS/packages/ar0x-hypr-config/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 9 — Hyprland 0.57 LUA reference config + applier (ADR-024).
+# ⚠️ Lua ONLY. Hyprland 0.57 REMOVED hyprland.conf; a stray .conf is RISK-002.
+# ⚠️ Installs ONLY under /usr/share/ar0x/hypr-config/**; /etc/skel/.config/hypr
+#    is owned by the Phase 6 airootfs overlay on the ISO (one owner per path).
+# All 14 sources are byte-identical mirrors of config/desktop/hypr/**.
+# -----------------------------------------------------------------------------
+pkgname=ar0x-hypr-config
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="ar0x Hyprland 0.57 Lua reference config (entry + 10 modules) + user applier"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=('bash' 'coreutils')
+optdepends=('hyprland=0.57.1: the compositor this config targets')
+source=(
+    'hyprland.lua'
+    'hyprpaper.conf'
+    'hyprlock.conf'
+    'hypridle.conf'
+    'lua/animations.lua'
+    'lua/autostart.lua'
+    'lua/env.lua'
+    'lua/input.lua'
+    'lua/keybinds.lua'
+    'lua/looknfeel.lua'
+    'lua/monitors.lua'
+    'lua/palette.lua'
+    'lua/programs.lua'
+    'lua/rules.lua'
+    'ar0x-apply-hypr-config'
+)
+sha256sums=(
+    '47a31a0fb5928bac704ee59a0a570d30e13dbac56c5a4deae46518abff3c3aac'
+    'c3ce4c011c015c902ce16b7e6ad7078bc14a6d976517b8647665f8085b21f1f1'
+    '4ab13b45c81dbeb8b38acb1aea7344e840f2b412a7e176b5a02d3fda1a6b9cd5'
+    '26cde37197cb4bc52cd8fcec538f9d12ab1f9f1ee23affb83bcae00591018f5d'
+    '1442eaaa232f5faa52b31a4123da28c5c4a147d0eb01f8ceb403be9fea657593'
+    'c1f4155feb56e90f8be79a50c80cb4ee41c0968cfc3574daf4bce0a04629513c'
+    '22315609b2fa116704b63180e4dbafbcb70c51d82c16687a44bc507e923ce7ab'
+    'ddab302485a43b0c2c8f71700de3cbea4f464a8ee61194a2212256a45ff6a1a1'
+    '483cc7e37863da65616bf8028ca42b85c20be08689d03e23e28223a4d759f041'
+    '7730c5cc079a82f7ca6f5ef1e98e58a5a94c4ab40f67959c00cd38bfe8d69d48'
+    'b99cbc9700a72a49ab9be3053a55c094e3222a3aa52742457f7ce36de66bcef4'
+    '96bc69021404896ff91362fd1fa0c26c246baefc202f6f041f37fe8c8ab84c30'
+    '54e89eb8bafd0abeb6ec9ea5b30c2d0f9be0965a8809fc5a88948115f914e3cb'
+    '648f4e0f5dcd57e3ac0b9ae1d2d501e33628e1d5db93d0751de66e5960e747ba'
+    '404de686d1a36d8c7d8b6691ad4bc7f23f3b739f71cafc1c48d21311919075c6'
+)
+
+package() {
+    install -Dm644 "$srcdir/hyprland.lua" "$pkgdir/usr/share/ar0x/hypr-config/hyprland.lua"
+    install -Dm644 "$srcdir/hyprpaper.conf" "$pkgdir/usr/share/ar0x/hypr-config/hyprpaper.conf"
+    install -Dm644 "$srcdir/hyprlock.conf" "$pkgdir/usr/share/ar0x/hypr-config/hyprlock.conf"
+    install -Dm644 "$srcdir/hypridle.conf" "$pkgdir/usr/share/ar0x/hypr-config/hypridle.conf"
+    install -Dm644 "$srcdir/lua/animations.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/animations.lua"
+    install -Dm644 "$srcdir/lua/autostart.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/autostart.lua"
+    install -Dm644 "$srcdir/lua/env.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/env.lua"
+    install -Dm644 "$srcdir/lua/input.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/input.lua"
+    install -Dm644 "$srcdir/lua/keybinds.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/keybinds.lua"
+    install -Dm644 "$srcdir/lua/looknfeel.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/looknfeel.lua"
+    install -Dm644 "$srcdir/lua/monitors.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/monitors.lua"
+    install -Dm644 "$srcdir/lua/palette.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/palette.lua"
+    install -Dm644 "$srcdir/lua/programs.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/programs.lua"
+    install -Dm644 "$srcdir/lua/rules.lua" "$pkgdir/usr/share/ar0x/hypr-config/lua/rules.lua"
+    install -Dm755 "$srcdir/ar0x-apply-hypr-config" "$pkgdir/usr/bin/ar0x-apply-hypr-config"
+}

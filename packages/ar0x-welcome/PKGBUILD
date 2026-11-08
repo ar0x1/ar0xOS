@@ -1,0 +1,65 @@
+# /home/user/ar0xOS/packages/ar0x-welcome/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 8 — GTK4 first-boot assistant. PyGObject is imported LAZILY so
+# --self-test runs on a headless CI host with no gtk4 installed.
+# Plain Gtk.Application (NOT libadwaita) because libadwaita ignores custom
+# GTK4 CSS (RISK-042). The .install scriptlet enables the USER unit globally.
+#
+# ⚠️ FILE-OWNERSHIP: this package deliberately does NOT install
+#    /usr/share/icons/hicolor/scalable/apps/ar0x-logo.svg. That icon is already
+#    installed by the Phase 7 ISO overlay / ar0x-wallpapers (Phase 9); owning
+#    it here would cause a pacman "file exists in filesystem" conflict.
+# -----------------------------------------------------------------------------
+pkgname=ar0x-welcome
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="GTK4 ar0x first-boot welcome, system summary, update check and extras installer"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=('python' 'python-gobject' 'gtk4' 'polkit' 'apparmor' 'bash'
+         'hicolor-icon-theme' 'ar0x-info' 'ar0x-update')
+optdepends=(
+    'papirus-icon-theme: freedesktop icon names'
+    'polkit-gnome: graphical polkit agent on Wayland'
+    'inter-font: matching display typeface'
+    'ar0x-wallpapers: ar0x-logo desktop icon and wallpapers (Phase 9)'
+)
+install=ar0x-welcome.install
+source=(
+    'ar0x-welcome.py'
+    'ar0x-welcome.desktop'
+    'ar0x-welcome.css'
+    'links.conf'
+    'extra-groups.conf'
+    'ar0x-welcome.service'
+    'ar0x-firstboot.service'
+    'ar0x-firstboot'
+    'ar0x-apparmor-ctl'
+    'ar0x-welcome.install'
+)
+sha256sums=(
+    'b53ae2847df706ef9da121ce933a2df78cab51c82dbd2a421bb4383262945dac'
+    'fc488128cfc824aaf75425c83576010434175617b1f45c4a39c1bc0d727a4f71'
+    '847b434560a40f9efd57c57f320ceaf3f78a268e0d04b28a91cd64c183e4774a'
+    '94197479044c3bf74cdb5c3c261535b158f0c61d04ab07eaaaa765731187fbad'
+    'cf9bee107d99152d3397f1af26fe5feff13900929e59a0ec3ddd7450e3c2771a'
+    '3827afe25c376e3657dbfe297b789eee539a6cad15d550a00f6507133f13f75e'
+    '72b8ca2a3ab012ebe927cbeb12a1f83cd7a0a75ec95e6da94f46b4626854e7aa'
+    '0e9e3206106b5aca199d1089e5d1374b261ab6ff6203ab92aa405eb47764772c'
+    '1799b56fc737bff84a1843e480899eb098136c214aedc2f4c232b989ca6a4151'
+    'a26b39e9f1ec65ed99fa6ebd8c568ae4789839fa353f644e57ca30c99c23fdcd'
+)
+
+package() {
+    install -Dm755 "$srcdir/ar0x-welcome.py"          "$pkgdir/usr/bin/ar0x-welcome"
+    install -Dm644 "$srcdir/ar0x-welcome.desktop"     "$pkgdir/usr/share/applications/ar0x-welcome.desktop"
+    install -Dm644 "$srcdir/ar0x-welcome.css"         "$pkgdir/usr/share/ar0x/welcome/ar0x-welcome.css"
+    install -Dm644 "$srcdir/links.conf"               "$pkgdir/usr/share/ar0x/welcome/links.conf"
+    install -Dm644 "$srcdir/extra-groups.conf"        "$pkgdir/usr/share/ar0x/welcome/extra-groups.conf"
+    install -Dm644 "$srcdir/ar0x-welcome.service"     "$pkgdir/usr/lib/systemd/user/ar0x-welcome.service"
+    install -Dm644 "$srcdir/ar0x-firstboot.service"   "$pkgdir/usr/lib/systemd/system/ar0x-firstboot.service"
+    install -Dm755 "$srcdir/ar0x-firstboot"           "$pkgdir/usr/lib/ar0x/ar0x-firstboot"
+    install -Dm755 "$srcdir/ar0x-apparmor-ctl"        "$pkgdir/usr/lib/ar0x/ar0x-apparmor-ctl"
+    install -Dm644 "$srcdir/ar0x-welcome.install"     "$pkgdir/usr/share/doc/ar0x-welcome/ar0x-welcome.install"
+}

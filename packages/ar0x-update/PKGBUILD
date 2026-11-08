@@ -1,0 +1,36 @@
+# /home/user/ar0xOS/packages/ar0x-update/PKGBUILD
+# -----------------------------------------------------------------------------
+# PHASE 8 — safe non-root pacman wrapper. Refuses bare root, enforces
+# SigLevel=Required on [ar0x], verifies the detached db signature in an
+# isolated dbpath, and NEVER uses --noconfirm / -Sy alone.
+# `backup=()` protects local edits of /etc/ar0x/update.conf (.pacnew on upgrade).
+# -----------------------------------------------------------------------------
+pkgname=ar0x-update
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Safe non-root pacman wrapper with signed-repository verification and rollback listing"
+arch=('any')
+url="https://github.com/ar0x1/ar0xOS"
+license=('GPL-3.0-or-later')
+depends=('bash' 'coreutils' 'pacman' 'fakeroot' 'polkit' 'grep' 'gawk')
+optdepends=(
+    'sudo: alternative privilege backend (AR0X_UPDATE_BACKEND=sudo)'
+    'pacman-contrib: upstream checkupdates reference implementation'
+)
+backup=('etc/ar0x/update.conf')
+source=(
+    'ar0x-update'
+    'ar0x-update.desktop'
+    'update.conf'
+)
+sha256sums=(
+    'b4a30a59d59a8ec9cb2dad9846ad382c4d927c0a5b60f1908ed757f2c1e51943'
+    '001000ed2f08913ba28a0ff344810316580dbcd32c1cac4deb48978215a44dad'
+    'e33cff8268974c0cc0c3844811066a37f1724a0db13b9092adcc76839ce7da35'
+)
+
+package() {
+    install -Dm755 "$srcdir/ar0x-update"          "$pkgdir/usr/bin/ar0x-update"
+    install -Dm644 "$srcdir/ar0x-update.desktop"  "$pkgdir/usr/share/applications/ar0x-update.desktop"
+    install -Dm644 "$srcdir/update.conf"          "$pkgdir/etc/ar0x/update.conf"
+}

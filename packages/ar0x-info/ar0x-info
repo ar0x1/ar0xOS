@@ -1,0 +1,293 @@
+#!/bin/bash
+# -----------------------------------------------------------------------------
+# /usr/bin/ar0x-info  (SOURCE: /home/user/ar0xOS/packages/ar0x-info/ar0x-info)
+# -----------------------------------------------------------------------------
+# PHASE 8 — ar0x system information tool.
+#
+# DEFAULT  : fastfetch with the branded /usr/share/ar0x/info/fastfetch.jsonc.
+# --plain  : pure-Bash ASCII logo + key/value summary. NO fastfetch, NO root,
+#            NO network, NO Python. Works on a bare chroot / rescue shell.
+# --json   : machine-readable JSON for ar0x-welcome and CI. No ANSI colours.
+# --logo   : print just the 8-line ASCII logo.
+# --self-test : exercise every pure-Bash code path (used by the sandbox and by
+#            tools/configure-tools.sh --self-test). NO installed system needed.
+#
+# WHY A WRAPPER: /etc/skel/.config/fastfetch/config.jsonc is a PER-USER file;
+# ar0x-info must produce the identical branded output for root, the live user
+# and a freshly created account, so it owns a system-wide config + art copy.
+# The two art files and the derived fastfetch.jsonc are byte/derivation-checked
+# against config/branding/** by tools/configure-tools.sh --check (single owner).
+#
+# AR0X_INFO_DATADIR is a documented TEST HOOK: point it at a smoke-test prefix
+# (tools/configure-tools.sh --sync) to run this script without installing the
+# package. Production always uses /usr/share/ar0x/info.
+# -----------------------------------------------------------------------------
+
+set -euo pipefail
+
+# --- Section 1: constants, paths and environment overrides -------------------
+readonly AR0X_INFO_VERSION='0.1.0'
+readonly AR0X_INFO_DATADIR="${AR0X_INFO_DATADIR:-/usr/share/ar0x/info}"
+readonly AR0X_INFO_OS_RELEASE="${AR0X_INFO_OS_RELEASE:-/etc/os-release}"
+readonly AR0X_INFO_ART="${AR0X_INFO_DATADIR}/ar0x-ascii.txt"
+readonly AR0X_INFO_TAGGED="${AR0X_INFO_DATADIR}/ar0x-fastfetch.txt"
+readonly AR0X_INFO_CONFIG="${AR0X_INFO_DATADIR}/fastfetch.jsonc"
+
+# 24-bit ANSI from config/versions.env (ADR-015). Used ONLY in --plain.
+readonly C_CYAN=$'\033[38;2;0;229;255m'
+readonly C_MAGENTA=$'\033[38;2;255;46;136m'
+readonly C_LIME=$'\033[38;2;168;255;96m'
+readonly C_MUTED=$'\033[38;2;107;120;145m'
+readonly C_RESET=$'\033[0m'
+
+# --- Section 2: logging ------------------------------------------------------
+err()  { printf 'ar0x-info: ERROR: %s\n' "$*" >&2; }
+note() { printf 'ar0x-info: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
+
+usage() {
+    cat <<'USAGE'
+ar0x-info 0.1.0 — ar0x system information (no root required)
+
+Usage: ar0x-info [MODE] [-- ARGS...]
+
+Modes (pick one):
+  (default)   Rich report via fastfetch with the branded config. Falls back to
+              --plain automatically when fastfetch is not installed.
+  --plain     Pure-Bash ASCII logo + summary. No external tools needed.
+  --json      Machine-readable JSON (UTF-8, no colours) for ar0x-welcome.
+  --logo      Print the 8-line plain ASCII logo only.
+  --version   Print version and exit.
+  --help      This help.
+  --self-test Run internal checks (no root, no network, no fastfetch).
+
+Everything after `--` is passed straight to fastfetch in the default mode,
+e.g. `ar0x-info -- --logo-width 40 --pipe`.
+
+Environment (test hooks, documented in docs/TOOLS_GUIDE.md §6):
+  AR0X_INFO_DATADIR     override /usr/share/ar0x/info
+  AR0X_INFO_OS_RELEASE  override /etc/os-release
+USAGE
+}
+
+# --- Section 3: safe /etc/os-release parsing ---------------------------------
+# os-release(5) forbids shell expansion, but we still PARSE instead of sourcing
+# so a malformed value can never execute code in this process (RISK-010 lesson).
+os_release_field() {
+    local key="$1" line=''
+    if [[ -r "$AR0X_INFO_OS_RELEASE" ]]; then
+        line="$(grep -m1 -E "^${key}=" -- "$AR0X_INFO_OS_RELEASE" 2>/dev/null || true)"
+    fi
+    [[ -n "$line" ]] || { printf '%s' ''; return 0; }
+    line="${line#*=}"
+    # Strip one matching pair of surrounding quotes only.
+    if [[ "$line" == \"*\" ]]; then line="${line#\"}"; line="${line%\"}"; fi
+    if [[ "$line" == \'*\' ]]; then line="${line#\'}"; line="${line%\'}"; fi
+    printf '%s' "$line"
+}
+
+# --- Section 4: JSON escaping (no jq / no Python dependency) ----------------
+json_escape() {
+    local s="${1-}"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+# --- Section 5: data collection ---------------------------------------------
+# All values are strings; unavailable data becomes "" (never `null`) so callers
+# can use a single type. `packages` is optional because pacman may be absent.
+collect_packages() {
+    if command -v pacman >/dev/null 2>&1; then
+        pacman -Q 2>/dev/null | wc -l | tr -d '[:space:]' || printf '0'
+    else
+        printf '%s' ''
+    fi
+}
+
+collect_uptime() {
+    local u=''
+    if [[ -r /proc/uptime ]]; then u="$(cut -d' ' -f1 < /proc/uptime 2>/dev/null || true)"; fi
+    printf '%s' "${u%%.*}"
+}
+
+collect_hostname() {
+    local h=''
+    if [[ -r /proc/sys/kernel/hostname ]]; then IFS= read -r h < /proc/sys/kernel/hostname || true; fi
+    printf '%s' "${h:-unknown}"
+}
+
+collect_wm() {
+    if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then printf '%s' 'Hyprland'
+    elif [[ -n "${SWAYSOCK:-}" ]]; then printf '%s' 'sway'
+    else printf '%s' "${XDG_CURRENT_DESKTOP:-unknown}"; fi
+}
+
+build_fields() {
+    DISTRO="$(os_release_field PRETTY_NAME)"
+    DISTRO_ID="$(os_release_field ID)"
+    VERSION="$(os_release_field VERSION_ID)"
+    CODENAME="$(os_release_field VERSION_CODENAME)"
+    ID_LIKE="$(os_release_field ID_LIKE)"
+    LOGO="$(os_release_field LOGO)"
+    ANSI_COLOR="$(os_release_field ANSI_COLOR)"
+    KERNEL="$(uname -s -r 2>/dev/null || printf 'unknown')"
+    ARCH="$(uname -m 2>/dev/null || printf 'unknown')"
+    HOSTNAME="$(collect_hostname)"
+    SHELL_NAME="${SHELL##*/}"; SHELL_NAME="${SHELL_NAME:-unknown}"
+    DESKTOP="${XDG_CURRENT_DESKTOP:-unknown}"
+    SESSION="${XDG_SESSION_TYPE:-unknown}"
+    WM="$(collect_wm)"
+    UPTIME="$(collect_uptime)"
+    PACKAGES="$(collect_packages)"
+    GENERATOR="ar0x-info ${AR0X_INFO_VERSION}"
+}
+
+# --- Section 6: --json -------------------------------------------------------
+emit_json() {
+    build_fields
+    printf '{\n'
+    printf '  "distro":        "%s",\n' "$(json_escape "$DISTRO")"
+    printf '  "id":            "%s",\n' "$(json_escape "$DISTRO_ID")"
+    printf '  "id_like":       "%s",\n' "$(json_escape "$ID_LIKE")"
+    printf '  "version":       "%s",\n' "$(json_escape "$VERSION")"
+    printf '  "codename":      "%s",\n' "$(json_escape "$CODENAME")"
+    printf '  "logo":          "%s",\n' "$(json_escape "$LOGO")"
+    printf '  "ansi_color":    "%s",\n' "$(json_escape "$ANSI_COLOR")"
+    printf '  "kernel":        "%s",\n' "$(json_escape "$KERNEL")"
+    printf '  "arch":          "%s",\n' "$(json_escape "$ARCH")"
+    printf '  "hostname":      "%s",\n' "$(json_escape "$HOSTNAME")"
+    printf '  "shell":         "%s",\n' "$(json_escape "$SHELL_NAME")"
+    printf '  "desktop":       "%s",\n' "$(json_escape "$DESKTOP")"
+    printf '  "session":       "%s",\n' "$(json_escape "$SESSION")"
+    printf '  "wm":            "%s",\n' "$(json_escape "$WM")"
+    printf '  "uptime_seconds":"%s",\n' "$(json_escape "$UPTIME")"
+    printf '  "packages":      "%s",\n' "$(json_escape "$PACKAGES")"
+    printf '  "generator":     "%s"\n' "$(json_escape "$GENERATOR")"
+    printf '}\n'
+}
+
+# --- Section 7: --plain / --logo ---------------------------------------------
+plain_art() {
+    if [[ -r "$AR0X_INFO_ART" ]]; then
+        cat -- "$AR0X_INFO_ART"
+    else
+        # Last-resort inline logo so --plain NEVER fails on a broken install.
+        printf '%s\n' '   ╭──────────────╮' '   │  >_  ar0x    │' '   ╰──────────────╯'
+    fi
+}
+
+emit_plain() {
+    build_fields
+    plain_art
+    printf '\n'
+    printf '  %s%-18s%s %s%s%s\n' "$C_CYAN" 'Distro'    "$C_RESET" "$C_MAGENTA" "$DISTRO"   "$C_RESET"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Version'   "$C_RESET" "$VERSION"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Codename'  "$C_RESET" "$CODENAME"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Kernel'    "$C_RESET" "$KERNEL"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Arch'      "$C_RESET" "$ARCH"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Host'      "$C_RESET" "$HOSTNAME"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Shell'     "$C_RESET" "$SHELL_NAME"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'Desktop'   "$C_RESET" "$DESKTOP / $SESSION"
+    printf '  %s%-18s%s %s\n'            "$C_CYAN" 'WM'        "$C_RESET" "$WM"
+    printf '  %s%-18s%s %ss%s\n'         "$C_CYAN" 'Uptime'    "$C_RESET" "${UPTIME:-0}" ''
+    if [[ -n "$PACKAGES" ]]; then
+        printf '  %s%-18s%s %s\n' "$C_CYAN" 'Packages' "$C_RESET" "$PACKAGES"
+    fi
+    printf '\n  %s%s%s\n' "$C_MUTED" "github.com/ar0x1/ar0xOS  ·  CC BY-SA 4.0 brand assets" "$C_RESET"
+}
+
+# --- Section 8: --self-test --------------------------------------------------
+self_test() {
+    local tmp json
+    tmp="$(mktemp -d)"; trap 'rm -rf -- "$tmp"' RETURN
+    # 8a. JSON is well-formed and has every documented key.
+    json="$(emit_json)"
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s' "$json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+need = {"distro","id","id_like","version","codename","logo","ansi_color",
+        "kernel","arch","hostname","shell","desktop","session","wm",
+        "uptime_seconds","packages","generator"}
+assert need <= set(d), "missing keys: %s" % (need - set(d))
+assert all(isinstance(v, str) for v in d.values()), "non-string value"
+print("[ OK ] ar0x-info --json: valid JSON, 17 string keys")
+' || die 'JSON self-test failed'
+    elif command -v jq >/dev/null 2>&1; then
+        printf '%s' "$json" | jq -e 'type == "object" and (keys | length) == 17' >/dev/null \
+            || die 'JSON self-test failed (jq)'
+        note '--json: valid JSON (jq)'
+    else
+        note '--json: no python3/jq here; skipped parser check'
+    fi
+    # 8b. No ANSI escape sequences leak into --json.
+    if printf '%s' "$json" | grep -q $'\033'; then die 'ANSI escape in --json output'; fi
+    printf '[ OK ] ar0x-info --json: zero ANSI escapes\n'
+    # 8c. Plain art is 8 lines, <=48 columns, no tabs.
+    if [[ -r "$AR0X_INFO_ART" ]]; then
+        local lines cols
+        lines="$(wc -l < "$AR0X_INFO_ART" | tr -d '[:space:]')"
+        cols="$(awk '{ if (length($0)>m) m=length($0) } END { print m+0 }' "$AR0X_INFO_ART")"
+        [[ "$lines" == '8' ]] || die "plain art has ${lines} lines, expected 8"
+        (( cols <= 48 )) || die "plain art has ${cols} columns, expected <=48"
+        ! grep -q $'\t' "$AR0X_INFO_ART" || die 'plain art contains a tab'
+        printf '[ OK ] ar0x-info --plain: 8 lines, %s cols max, no tabs\n' "$cols"
+    else
+        note '--plain: art file not present in this test prefix; inline fallback used'
+    fi
+    # 8d. --logo equals the art file when present.
+    if [[ -r "$AR0X_INFO_ART" ]]; then
+        plain_art > "$tmp/logo"
+        cmp -s -- "$tmp/logo" "$AR0X_INFO_ART" || die '--logo differs from art file'
+        printf '[ OK ] ar0x-info --logo: byte-identical to art file\n'
+    fi
+    # 8e. --plain must not require root or fastfetch.
+    emit_plain > "$tmp/plain" || die '--plain failed'
+    grep -q 'Distro' "$tmp/plain" || die '--plain output missing summary'
+    printf '[ OK ] ar0x-info --plain: renders with no fastfetch / no root\n'
+    # 8f. fastfetch config must reference the art we actually ship.
+    if [[ -r "$AR0X_INFO_CONFIG" ]]; then
+        grep -Fq '/usr/share/ar0x/info/ar0x-fastfetch.txt' "$AR0X_INFO_CONFIG" \
+            || die 'fastfetch.jsonc does not point at the shipped tagged art'
+        grep -Fq '"type": "file"' "$AR0X_INFO_CONFIG" \
+            || die 'fastfetch.jsonc lost logo.type = file'
+        printf '[ OK ] ar0x-info fastfetch.jsonc: type=file, absolute art path\n'
+    fi
+    printf '[ OK ] ar0x-info --self-test PASSED\n'
+}
+
+# --- Section 9: argument dispatch -------------------------------------------
+MODE='auto'
+PASSTHRU=()
+while (( $# > 0 )); do
+    case "$1" in
+        --plain)       MODE='plain' ;;
+        --json)        MODE='json' ;;
+        --logo)        MODE='logo' ;;
+        --version)     printf 'ar0x-info %s\n' "$AR0X_INFO_VERSION"; exit 0 ;;
+        -h|--help)     usage; exit 0 ;;
+        --self-test)   MODE='selftest' ;;
+        --)            shift; PASSTHRU+=("$@"); break ;;
+        -*)            die "Unknown option: $1 (try --help)." ;;
+        *)             PASSTHRU+=("$1") ;;
+    esac
+    shift
+done
+
+case "$MODE" in
+    json)      emit_json ;;
+    plain)     emit_plain ;;
+    logo)      plain_art ;;
+    selftest)  self_test ;;
+    auto)
+        if command -v fastfetch >/dev/null 2>&1 && [[ -r "$AR0X_INFO_CONFIG" ]]; then
+            exec fastfetch --config "$AR0X_INFO_CONFIG" "${PASSTHRU[@]}"
+        fi
+        [[ ${#PASSTHRU[@]} -eq 0 ]] || note 'fastfetch is unavailable; -- ARGS ignored in --plain fallback'
+        emit_plain
+        ;;
+esac

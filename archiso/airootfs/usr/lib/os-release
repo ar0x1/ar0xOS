@@ -1,0 +1,33 @@
+# /etc/os-release — ar0x distribution identification (os-release(5), systemd 262)
+# Installed by tools/bootstrap.sh and tools/configure-branding.sh --sync.
+# Duplicate at /usr/lib/os-release: Arch's `filesystem` package ships
+# /etc/os-release as a SYMLINK to that path, so both must carry ar0x data.
+# os-release(5) forbids variable expansion: every value is a literal.
+NAME="ar0x"
+PRETTY_NAME="ar0x 0.1.0 (ar0x root)"
+ID=ar0x
+ID_LIKE=arch
+VERSION="0.1.0 (ar0x root)"
+VERSION_ID="0.1.0"
+# VERSION_CODENAME must be a lower-case identifier without spaces (os-release(5)).
+# The human-readable codename lives in AR0X_CODENAME and PRETTY_NAME.
+VERSION_CODENAME=ar0x-root
+BUILD_ID=ar0x-0.1.0-x86_64
+# ANSI_COLOR = reset + 24-bit truecolor cyan #00E5FF (0;38;2;R;G;B).
+ANSI_COLOR="0;38;2;0;229;255"
+# LOGO names a freedesktop.org Icon Theme icon (systemd >= 252). We ship
+# /usr/share/icons/hicolor/scalable/apps/ar0x-logo.svg from assets/icons/.
+LOGO=ar0x-logo
+CPE_NAME="cpe:/o:ar0x:ar0x:0.1.0"
+HOME_URL="https://github.com/ar0x1/ar0xOS"
+DOCUMENTATION_URL="https://github.com/ar0x1/ar0xOS/blob/main/docs/BRANDING_GUIDE.md"
+SUPPORT_URL="https://github.com/ar0x1/ar0xOS/issues"
+BUG_REPORT_URL="https://github.com/ar0x1/ar0xOS/issues"
+VENDOR_NAME="ar0x project"
+VENDOR_URL="https://github.com/ar0x1/ar0xOS"
+# Vendor-specific keys MUST be prefixed to avoid collisions (os-release(5)).
+AR0X_CODENAME="ar0x root"
+AR0X_EDITION="Developer"
+AR0X_BASE="Arch Linux"
+AR0X_KERNEL="linux-lts 6.18.59-1"
+AR0X_SNAPSHOT="2026/11/01"
