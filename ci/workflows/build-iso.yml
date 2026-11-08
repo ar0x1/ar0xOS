@@ -16,8 +16,9 @@
 # ⚠️ This workflow UPLOADS THE 6 ARTIFACTS AS A WORKFLOW ARTIFACT ONLY.
 #    It NEVER creates a git tag, NEVER creates a GitHub Release, NEVER rsyncs
 #    to a mirror and NEVER announces. Publication is docs/RELEASE_GUIDE.md §4.
-# ⚠️ A workflow_dispatch workflow is triggerable only once this file is on the
-#    default branch (merge the PR first). RISK-053/054 remain MANUAL until then.
+# ⚠️ PR #1 is MERGED, so this workflow is already on the default branch and
+#    can be dispatched after the 3 secrets are configured. RISK-053/054 remain
+#    MANUAL (QEMU/hardware QA, tag + publication).
 # -----------------------------------------------------------------------------
 name: Build ar0x ISO (MANUAL / real Arch container)
 

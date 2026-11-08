@@ -47,7 +47,7 @@ DOC_NEEDLES = (
     "docker compose", "vagrant up", "AR0X_CONFIRM_RELEASE_CHAIN=yes",
     "PENDING-KEYGEN", "RISK-053", "RISK-054", "40/40", "ADR-029",
     "mkarchiso", "build-release.sh --run", "CapEff",
-    "arena/53f7f9f8-ar0xos",
+    "git clone https://github.com/ar0x1/ar0xOS.git", "PR #1 is MERGED",
 )
 CI_NEEDLES = (
     "workflow_dispatch", "build-release.sh --run", "upload-artifact",
@@ -95,7 +95,7 @@ def check_docs(root):
     r = read(root / "README.md")
     for needle in ("Make the ISO", "build-release.sh --run",
                    "docs/BUILD_RELEASE_ISO.md", "SOURCE-COMPLETE, RELEASE-PENDING",
-                   "arena/53f7f9f8-ar0xos"):
+                   "git clone https://github.com/ar0x1/ar0xOS.git"):
         assert needle in r, "README.md missing %r" % needle
     w = read(root / "ci/workflows/build-iso.yml")
     for needle in CI_NEEDLES:

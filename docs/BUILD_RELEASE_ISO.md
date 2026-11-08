@@ -29,24 +29,26 @@ fabricating one. This is deliberate (ADR-027/028).
 
 ---
 
-## 0.5 Get the SOURCE first — and use the right branch
+## 0.5 Get the SOURCE first (PR #1 is MERGED — plain clone is enough)
 
 There is **no ISO to download anywhere**. What you download is the ~3.8 MB
 source repository (about 560 files); the ISO is generated locally by `--run`.
-All of this work lives on branch `arena/53f7f9f8-ar0xos` (**PR #1** is open);
-`main` still holds only `Initial commit`, so a plain `git clone` gives you the
-old tree with no `tools/build-release.sh`.
+**PR #1 is MERGED**: `main` now holds the entire tree (merge commit `4b1f7e3`),
+so a plain `git clone` is correct — no branch flag needed. The working branch
+`arena/638da8d7-ar0xos` was cut from that same `main` commit.
 
 ```bash
-git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git
+git clone https://github.com/ar0x1/ar0xOS.git
 cd ar0xOS
-git log -1 --oneline          # expect 2e1c78f ...
+git log -1 --oneline          # expect 4b1f7e3 Merge ar0xOS Phases 1-12 ...
+git branch --show-current     # main
 ./tools/build-release.sh --check
 ./tools/build-release.sh --preflight
 ```
 
-ZIP alternative:
-`https://github.com/ar0x1/ar0xOS/archive/refs/heads/arena/53f7f9f8-ar0xos.zip`.
+ZIP alternative: `https://github.com/ar0x1/ar0xOS/archive/refs/heads/main.zip`.
+If `tools/build-release.sh` is missing you have an old checkout:
+`git fetch origin && git checkout main && git pull --ff-only`.
 Run every command **inside the cloned folder**; build output goes to
 `/opt/ar0x-build/out/`, never into the checkout. Windows/macOS users should use
 an Arch VM or a cloud VPS with Docker (WSL2 privileged/loop support is
@@ -166,10 +168,11 @@ sudo AR0X_CONFIRM_RELEASE_CHAIN=yes AR0X_CONFIRM_SIGNED_REPO=yes \
      AR0X_CONFIRM_BUILD=yes AR0X_CONFIRM_SIGN=yes ./tools/build-release.sh --run
 ```
 
-### D. GitHub Actions (after this branch is merged to `main`)
+### D. GitHub Actions (already on `main` — PR #1 MERGED)
 
-`ci/workflows/build-iso.yml` is `workflow_dispatch`-only and needs repository
-secrets for the offline key. It runs the same privileged Arch container and
+`ci/workflows/build-iso.yml` is `workflow_dispatch`-only and is already on
+`main`, so it can be dispatched now; it needs repository secrets for the
+offline key. It runs the same privileged Arch container and
 uploads the 6 artifacts as a workflow artifact — **never** a GitHub Release.
 See `ci/workflows/README.md`.
 

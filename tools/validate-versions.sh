@@ -879,13 +879,16 @@ grep -Fq 'inject_signed_packages' "${AR0X_SOURCE_ROOT}/tools/bootstrap.sh" \
     || fail "Post-plan/ADR-029: staged-only signed-package injection is missing."
 grep -Fq 'workflow_dispatch' "${AR0X_SOURCE_ROOT}/ci/workflows/build-iso.yml" \
     || fail "Post-plan: build-iso.yml must be workflow_dispatch-only."
-# RISK: all work lives on branch arena/53f7f9f8-ar0xos (PR #1 is OPEN); main is
-# only "Initial commit". A plain `git clone` would give users the WRONG tree.
+# PR #1 is MERGED: main now holds all 560 files. Docs must show the plain clone
+# as canonical and must NOT still point at the stale pre-merge branch.
 for f in README.md docs/QUICKSTART_HINDI.md docs/BUILD_HOST.md docs/BUILD_RELEASE_ISO.md; do
-    grep -Fq 'arena/53f7f9f8-ar0xos' "${AR0X_SOURCE_ROOT}/${f}" \
-        || fail "Post-plan: ${f} must pin the working branch (PR #1 is not on main)."
+    grep -Fq 'git clone https://github.com/ar0x1/ar0xOS.git' "${AR0X_SOURCE_ROOT}/${f}" \
+        || fail "Post-plan: ${f} must show the canonical plain git clone (PR #1 is MERGED)."
+    if grep -Fq 'arena/53f7f9f8-ar0xos' "${AR0X_SOURCE_ROOT}/${f}"; then
+        fail "Post-plan: ${f} still points at the stale pre-merge branch."
+    fi
 done
-ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI, branch-pinned docs"
+ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI, merged-state docs"
 
 # Delegate the FULL post-plan structural check (hard gates, no tag/upload in the
 # driver, fork guard, Docker/Vagrant recipes, clean tracked package mirrors).
