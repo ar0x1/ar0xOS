@@ -888,7 +888,14 @@ for f in README.md docs/QUICKSTART_HINDI.md docs/BUILD_HOST.md docs/BUILD_RELEAS
         fail "Post-plan: ${f} still points at the stale pre-merge branch."
     fi
 done
-ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI, merged-state docs"
+# GitHub Actions ONLY reads .github/workflows/*.yml. A workflow parked in
+# ci/workflows/ is documentation, never dispatchable. Keep the two copies in sync.
+[[ -f "${AR0X_SOURCE_ROOT}/.github/workflows/build-iso.yml" ]] \
+    || fail "GitHub Actions reads only .github/workflows/: live build-iso.yml is missing."
+cmp -s "${AR0X_SOURCE_ROOT}/ci/workflows/build-iso.yml" \
+       "${AR0X_SOURCE_ROOT}/.github/workflows/build-iso.yml" \
+    || fail "CI templates drifted: mirror ci/workflows/build-iso.yml -> .github/workflows/build-iso.yml."
+ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI, merged-state docs, live .github/workflows mirror"
 
 # Delegate the FULL post-plan structural check (hard gates, no tag/upload in the
 # driver, fork guard, Docker/Vagrant recipes, clean tracked package mirrors).

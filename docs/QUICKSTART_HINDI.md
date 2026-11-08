@@ -7,6 +7,57 @@
 
 ---
 
+---
+
+## -1. ⛔ PEHLE YE PADHO — kya aapki machine ISO bana sakti hai?
+
+`./tools/setup-build-env.sh --check` **sirf read-only report** hai. Isme hardware
+ki kami ko jaan-bujhkar WARN kiya jata hai (kyunki ye CI/lint machine par bhi
+chalta hai). **"✅ --check completed" ka matlab "ISO ban jayegi" BILKUL NAHI hai.**
+`sudo ./tools/setup-build-env.sh --yes` non-Arch host par **design se refuse**
+karta hai, kyunki poora toolchain `pacman` se install hota hai.
+
+| Chahiye | Minimum | Na ho to |
+|---|---|---|
+| OS | **Arch Linux** ya privileged `archlinux:base-devel` container | `Host is not Arch-based (ID=zorin)` — Zorin/Ubuntu/Mint me `pacman`, `makepkg`, `mkarchiso` hote hi nahi |
+| RAM | **8 GiB** (16 rec.) | `Only 5.7 GiB RAM` → full mode me hard FAIL |
+| `/opt` me khali jagah | **40 GiB** (64 rec.) | `Not enough free space at /opt: 2.1 GiB` → `mkarchiso` ENOSPC |
+| Root | `sudo` | mount/mknod/chroot/loop chahiye |
+| Live USB **nahi** | installed filesystem | `lowerdir=/filesystem.squashfs,upperdir=/cow/upper` = RAM-backed overlay, sirf 2 GiB |
+
+Aapke output me ye 5 lines theek isi kaaran hain:
+
+```
+[FAIL] Host is not Arch-based (ID=zorin). mkarchiso requires an Arch host or an Arch container.
+[FAIL] Only 5.7 GiB RAM; 8 GiB minimum (16 GiB recommended).
+[FAIL] Not enough free space at /opt: 2.1 GiB < required 40.0 GiB.
+[FAIL] Required command not found: makepkg
+[FAIL] Required command not found: mkarchiso
+```
+
+**Scripts sahi kaam kar rahe hain** — wo todhi-phodi ISO banane se pehle ruk gaye.
+Is machine par koi bhi command sequence ISO nahi bana sakta. Ek raasta chuno:
+
+1. **Arch Linux install karo** aisi machine par jisme 8+ GiB RAM aur 40+ GiB
+   khali disk ho (ya `--build-root /mnt/big/ar0x` do).
+2. **Badi machine + Docker**: `docker compose -f docker/compose.yaml build`, aur
+   `setup-build-env.sh --yes --allow-non-arch` **container ke andar** chalao.
+3. **Cloud VPS** (4 vCPU / 16 GiB / 80 GiB) le kar wahan Arch ya Docker.
+4. **GitHub Actions** — neeche §0 "GitHub Actions" dekho. Workflow ab
+   `.github/workflows/build-iso.yml` me bhi hai, tabhi dispatch hoga. Lekin
+   standard `ubuntu-latest` me sirf **~14 GB SSD** hoti hai; `runner` input me
+   self-hosted / larger runner (>= 40 GiB free) do, warna ENOSPC.
+
+⚠️ CI runner par private key GitHub Secret me jati hai — ye **air-gapped nahi**
+hai (RISK-051). Asli public release ke liye key air-gapped machine par banao.
+
+> 💡 Aapka `--keygen` **success** ho gaya (FPR `AE5CDD98…`) — par ye Live USB
+> session hai. Reboot se pehle private key ka encrypted OFFLINE backup bana lo,
+> warna key hamesha ke liye chali jayegi.
+
+
+---
+
 ## 0. Shuruat — "ISO ka code" kahan se aayega? (ISO download NAHI karni)
 
 ### Seedha jawab
@@ -103,15 +154,19 @@ nahi**, `/opt/ar0x-build/out/` me jata hai (gitignored, isliye repo clean rahega
 
 ### GitHub Actions — bina apni machine ke (ab MERGE ho chuka hai)
 
-`ci/workflows/build-iso.yml` ab **`main` par hai**, isliye
-`workflow_dispatch` seedha trigger ho sakta hai — koi PR merge karne ki zarurat
-nahi. GitHub ke runner par hi privileged Arch container me ISO banta hai:
+`workflow_dispatch` dispatch ho sakta hai, lekin **dhyan do**: GitHub
+Actions sirf `.github/workflows/` padhta hai. Isliye workflow ka asli copy
+`.github/workflows/build-iso.yml` me hai (`ci/workflows/build-iso.yml` uska
+validated mirror, dono byte-identical). **Pehle use `main` par merge karna hoga**,
+tab Actions me "Build ar0x ISO" dikhega. GitHub runner par privileged Arch
+container me ISO banta hai — standard runner me sirf ~14 GB SSD hoti hai,
+isliye `runner` input me self-hosted/larger runner do:
 
 1. Repo → **Settings → Secrets and variables → Actions** me 3 secrets daalo:
    `AR0X_RELEASE_GPG_KEY` (offline private key ka base64),
    `AR0X_GPG_PASSPHRASE`, `AR0X_RELEASE_FPR` (40-hex).
 2. **Actions → "Build ar0x ISO" → Run workflow** (`dry_run` pehle on karke
-   preflight dekh sakte ho).
+   preflight dekh sakte ho; `runner` me >= 40 GiB free wala runner do).
 3. Workflow ke **Artifacts** se 6 files download karo.
 
 ⚠️ Ye bhi **tag/release nahi karta**; QEMU/hardware QA (40/40) aur publication

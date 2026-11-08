@@ -263,6 +263,39 @@ if (( CHECK_ONLY == 1 )); then
     if (( AR0X_FAILURES > 0 )); then
         warn "Some preflight items failed. On a real Arch host with root these are fatal."
     fi
+
+    # --check is READ-ONLY and deliberately downgrades hardware shortfalls to
+    # warnings (it also runs on lint/CI machines). That must NEVER be read as
+    # "this host can build the ISO". Print an explicit eligibility verdict.
+    _v_id="unknown"
+    if [[ -r /etc/os-release ]]; then
+        _v_id="$( . /etc/os-release; printf '%s' "${ID:-unknown}" )"
+    fi
+    _v_parent="$AR0X_BUILD_ROOT"
+    while [[ ! -d "$_v_parent" && "$_v_parent" != "/" ]]; do _v_parent="$(dirname -- "$_v_parent")"; done
+    _v_avail="$(df -Pk -- "$_v_parent" 2>/dev/null | awk 'NR==2 {printf "%d", $4 * 1024}')"
+    _v_blockers=()
+    case "$_v_id" in
+        arch|archlinux|archlinuxarm|artix|endeavouros|manjaro|garuda) ;;
+        *) _v_blockers+=("OS is ${_v_id} (not Arch): pacman/makepkg/mkarchiso do not exist here") ;;
+    esac
+    (( RAM_KB >= AR0X_MIN_RAM_KB )) \
+        || _v_blockers+=("RAM $(human_bytes "$((RAM_KB * 1024))") < 8 GiB minimum")
+    (( ${_v_avail:-0} >= AR0X_MIN_DISK_BYTES )) \
+        || _v_blockers+=("free space at ${_v_parent} < 40 GiB required")
+    if (( ${#_v_blockers[@]} > 0 )); then
+        printf '\n%s=== BUILD HOST VERDICT: THIS MACHINE CANNOT BUILD THE ISO ===%s\n' \
+            "$_AR0X_C_ERR" "$_AR0X_C_RST"
+        for _v_b in "${_v_blockers[@]}"; do printf '  [X] %s\n' "$_v_b"; done
+        printf '  -> --check only PRINTS what a real host would need; it installed NOTHING.\n'
+        printf '  -> Full mode (sudo ... --yes) will REFUSE on this host by design.\n'
+        printf '  -> Read docs/BUILD_RELEASE_ISO.md section 0 / docs/QUICKSTART_HINDI.md section -1.\n'
+        printf '  -> You need: Arch Linux (or a privileged Arch container), 8+ GiB RAM, 40+ GiB free.\n'
+    else
+        printf '\n%s=== BUILD HOST VERDICT: host is a candidate (still needs root + tools) ===%s\n' \
+            "$_AR0X_C_OK" "$_AR0X_C_RST"
+    fi
+
     printf '\n%s✅ --check completed (read-only)%s\n' "$_AR0X_C_OK" "$_AR0X_C_RST"
     exit 0
 fi
