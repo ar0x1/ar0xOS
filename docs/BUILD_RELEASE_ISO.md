@@ -75,6 +75,32 @@ generate the master key on an air-gapped machine and build there instead.
 
 ---
 
+### Mobile phones (Android / iOS)
+
+**No — the ISO cannot be built on a phone.** `ar0x` is x86_64-only
+(`setup-build-env.sh` fails on `aarch64`), `mkarchiso` needs real root plus
+`mount`/`chroot`/`mknod`/loop devices, an Android kernel with
+`CONFIG_OVERLAY_FS`/`CONFIG_SQUASHFS`/`CONFIG_BLK_DEV_LOOP`/`CONFIG_FUSE_FS`,
+Arch's `pacman`/`makepkg`/`repo-add`/`mkarchiso` toolchain, 8 GiB RAM and
+40 GiB free. Termux/proot-distro provides a **rootless userspace chroot** via
+ptrace — no real root, no FUSE/real-filesystem mounts, no device access — and
+its Arch image is **Arch Linux ARM**, not x86_64. Cross-arch execution would
+need QEMU user-mode, and `mkarchiso` would still fail without real mounts.
+
+A phone IS useful as a **remote control**: dispatch the GitHub Actions
+workflow from the mobile browser (3 secrets + a `runner` with >= 40 GiB free),
+download the 6 artifacts (~2.2 GiB ISO needs free phone storage), SSH from
+Termux into an Arch VPS/PC and run the commands there, verify with
+`sha256sum -c SHA256SUMS`, or flash an already-built ISO to USB with
+**EtchDroid** (Android, USB OTG, no root). The build itself always happens on
+an x86_64 Arch host, a VPS, or a CI runner.
+
+References: `https://github.com/termux/proot-distro` ·
+`https://github.com/ltermux/proot-distro1` ·
+`https://github.com/etchdroid/etchdroid`
+
+---
+
 ## 0.5 Get the SOURCE first (PR #1 is MERGED — plain clone is enough)
 
 There is **no ISO to download anywhere**. What you download is the ~3.8 MB
