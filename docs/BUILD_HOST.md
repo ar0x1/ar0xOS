@@ -103,7 +103,7 @@ sudo reboot                       # ⚠️ MANUAL: only if kernel/glibc/systemd 
 
 # --- 4.2 Get the source tree --------------------------------------------------
 sudo pacman -S --needed git base-devel
-git clone https://github.com/ar0x1/ar0xOS.git ~/ar0xOS
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git ~/ar0xOS
 cd ~/ar0xOS
 git checkout arena/53f7f9f8-ar0xos
 

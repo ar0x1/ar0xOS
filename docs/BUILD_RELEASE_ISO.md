@@ -29,6 +29,29 @@ fabricating one. This is deliberate (ADR-027/028).
 
 ---
 
+## 0.5 Get the SOURCE first — and use the right branch
+
+There is **no ISO to download anywhere**. What you download is the ~3.8 MB
+source repository (about 560 files); the ISO is generated locally by `--run`.
+All of this work lives on branch `arena/53f7f9f8-ar0xos` (**PR #1** is open);
+`main` still holds only `Initial commit`, so a plain `git clone` gives you the
+old tree with no `tools/build-release.sh`.
+
+```bash
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git
+cd ar0xOS
+git log -1 --oneline          # expect 2e1c78f ...
+./tools/build-release.sh --check
+./tools/build-release.sh --preflight
+```
+
+ZIP alternative:
+`https://github.com/ar0x1/ar0xOS/archive/refs/heads/arena/53f7f9f8-ar0xos.zip`.
+Run every command **inside the cloned folder**; build output goes to
+`/opt/ar0x-build/out/`, never into the checkout. Windows/macOS users should use
+an Arch VM or a cloud VPS with Docker (WSL2 privileged/loop support is
+unreliable). Full Hinglish walkthrough: `docs/QUICKSTART_HINDI.md`.
+
 ## 1. The one command (after the human key step)
 
 ```bash

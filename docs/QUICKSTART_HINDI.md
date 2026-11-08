@@ -7,6 +7,104 @@
 
 ---
 
+## 0. Sabse pehle — "ISO ka code" kahan se aayega? (ISO download NAHI karni)
+
+### Seedha jawab
+**Aapko ISO download nahi karni — SOURCE CODE download karni hai.** Koi `.iso`
+file kahin bhi **maujood hi nahi hai** (na GitHub par, na is workspace me). Jo
+maine likha hai wo ~**560 files / ~3.8 MB** ka repository hai: build scripts,
+archiso profile, Calamares config, docs. `build-release.sh --run` **aapki apni
+machine par** ISO *generate* karega. Isliye "ISO ka code" = ye repo.
+
+### ⚠️ Sabse badi galti: branch
+Saara kaam branch **`arena/53f7f9f8-ar0xos`** par hai (PR **#1** open hai).
+`main` par sirf `Initial commit` hai. **Plain `git clone` mat karna** — purana
+code aa jayega aur `tools/build-release.sh` milega hi nahi.
+
+### Option A — `git` se (recommended)
+
+```bash
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git
+cd ar0xOS
+git log -1 --oneline     # "2e1c78f Add Hinglish ISO quickstart..." dikhna chahiye
+git branch --show-current # arena/53f7f9f8-ar0xos
+ls                        # archiso/ assets/ ci/ config/ docker/ docs/ packages/ tools/ ...
+```
+
+Agar clone ho gaya hai lekin branch galat hai:
+`git fetch origin arena/53f7f9f8-ar0xos && git checkout arena/53f7f9f8-ar0xos`.
+
+### Option B — ZIP (git install kiye bina)
+
+```
+https://github.com/ar0x1/ar0xOS/archive/refs/heads/arena/53f7f9f8-ar0xos.zip
+```
+Browser me bhi: GitHub → branch dropdown → `arena/53f7f9f8-ar0xos` → **Code →
+Download ZIP** → extract → `cd ar0xOS-arena-53f7f9f8-ar0xos`.
+
+### Option C — PR se dekhna / lena
+
+```
+https://github.com/ar0x1/ar0xOS/pull/1
+```
+"Files changed" me saari files dikh ti hain. Build ke liye Option A/B behtar hai.
+
+### Option D — Arena workspace
+
+Jo files is chat ke viewer me hain (`docs/QUICKSTART_HINDI.md`,
+`docs/BUILD_RELEASE_ISO.md`, `tools/build-release.sh`, …) wahi repo ki files
+hain. Par build ke liye poora folder chahiye, isliye `git clone` sabse aasan hai.
+
+### Code me kya kya hai (jo aap download kar rahe ho)
+
+| Path | Kaam |
+|---|---|
+| `tools/build-release.sh` | **ek command** me poora ISO chain (`--run`) |
+| `tools/setup-repo.sh` | offline keygen → 8 packages → sign → verify |
+| `tools/bootstrap.sh` | archiso profile stage karta hai (`--stage`) |
+| `tools/build-iso.sh` | `mkarchiso`, 2.2 GiB gate, QEMU launchers |
+| `tools/checksum.sh` | `SHA256SUMS` + detached GPG signatures |
+| `tools/lib/*.py` | offline validators (negative tests ke saath) |
+| `config/**`, `archiso/**` | system, desktop, branding, Calamares, ISO pins |
+| `packages/*/PKGBUILD` | 8 `ar0x-*` packages |
+| `docker/Dockerfile`, `docker/compose.yaml` | privileged Arch build container |
+| `docs/**` | yahi guide + 40-item testing checklist + release guide |
+
+### Commands **kahan** type karne hain?
+
+Clone jis folder me kiya (`~/ar0xOS`), **usi folder ke andar** terminal khol kar
+sab commands chalao. `./tools/...` ka matlab yahi current folder hai. `sudo`
+wali commands par aapka Linux password maangega. Build ka output **repo me
+nahi**, `/opt/ar0x-build/out/` me jata hai (gitignored, isliye repo clean rahega).
+
+### Apne OS ke hisaab se raasta chuno
+
+| Aapke paas | Kya karein |
+|---|---|
+| **Linux + Docker** | §2 "Option A" — sabse aasan, Arch install karne ki zarurat nahi |
+| **Arch Linux (native)** | §2 "Option B", `sudo ./tools/setup-build-env.sh --yes` |
+| **Windows / macOS** | VirtualBox/VMware me **Arch Linux VM** banao (40–64 GB disk, 8–16 GB RAM), ya cloud VPS (Ubuntu + Docker). ⚠️ WSL2 me `--privileged` + loop devices unreliable hai, avoid karo |
+| **Koi 40 GB machine nahi** | neeche "GitHub Actions" wala raasta — local build ki zarurat nahi |
+
+### GitHub Actions — bina apni machine ke (PR merge ke baad)
+
+`ci/workflows/build-iso.yml` GitHub ke runner par hi privileged Arch container
+me ISO banata hai. Lekin `workflow_dispatch` sirf **default branch** par chalta
+hai, isliye:
+
+1. PR **#1** ko `main` me merge karo.
+2. Repo → **Settings → Secrets and variables → Actions** me 3 secrets daalo:
+   `AR0X_RELEASE_GPG_KEY` (offline private key ka base64),
+   `AR0X_GPG_PASSPHRASE`, `AR0X_RELEASE_FPR` (40-hex).
+3. **Actions → "Build ar0x ISO" → Run workflow** (`dry_run` pehle checkbox on
+   karke preflight dekh sakte ho).
+4. Workflow ke **Artifacts** se 6 files download karo.
+
+⚠️ Ye bhi **tag/release nahi karta**; QEMU/hardware QA (40/40) aur publication
+phir bhi manual hai. Forked PR ko kabhi signing secrets mat dena (RISK-051).
+
+---
+
 ## 1. Aapko kya chahiye
 
 | Cheez | Minimum | Recommended |
@@ -30,7 +128,7 @@ Ye CI/sandbox me generate nahi hoti (RISK-051). Private key kabhi Git mat daalna
 ### Option A — Docker (non-Arch host par bhi chalega) ✅ recommended
 
 ```bash
-git clone https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
 docker compose -f docker/compose.yaml build
 docker compose -f docker/compose.yaml run --rm ar0x-builder \
     ./tools/setup-build-env.sh --check
@@ -43,7 +141,7 @@ aage wale steps chalao.
 ### Option B — Seedha Arch host
 
 ```bash
-git clone https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
 ./tools/setup-build-env.sh --check     # read-only, kuch bhi install nahi karta
 sudo ./tools/setup-build-env.sh        # packages install karta hai
 ```

@@ -86,7 +86,7 @@ whose key is not published here out of band). RISK-051.
 ## Build it yourself (real Arch host required)
 
 ```bash
-git clone https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
+git clone -b arena/53f7f9f8-ar0xos https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
 ./tools/validate-versions.sh                 # offline gates
 ./tools/bootstrap.sh --check
 ./tools/build-iso.sh --preflight            # host prerequisites
