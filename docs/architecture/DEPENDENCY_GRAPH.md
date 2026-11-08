@@ -346,6 +346,9 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | DRAFT banners removed before a signed ISO exists | false release claim (RISK-054) | `check_docs()` + `validate-versions.sh §7m` assert `UNRELEASED` / `DO NOT PUBLISH` / `DO NOT SEND` |
 | FPR published only in release notes | an attacker controlling the release can substitute the key too | ADR-028: FPR published OUT OF BAND in `README.md` |
 | `--publish` actually uploading | irreversible publication of an unsigned artefact | driver is PRINT-ONLY, NEVER uploads; `--self-test` proves it refuses without `AR0X_CONFIRM_PUBLISH=yes` |
+| `build-iso.sh --build` calling only `bootstrap.sh --sync` | `mkarchiso` receives a MISSING/STALE `$AR0X_PROFILE_STAGE` | ADR-029: new `bootstrap.sh --stage` really builds the disposable profile; `--build` calls `--stage --with-ar0x-repo --with-signed-packages` |
+| Editing `config/packages.x86_64` to add `calamares` | breaks the RISK-048 offline gate and risks committing unsigned packages | ADR-029: staged-profile-only injection, enforced by `ar0x_build_release.py` + a REAL `--self-test` |
+| Validators requiring literal `PENDING-KEYGEN` | the first real release gate (keygen) makes every validator FAIL | `validate-versions.sh §7m` accepts `PENDING-KEYGEN` OR a published 40-hex FPR with a signed db |
 | ISO built before the signed `[ar0x]` db exists | `pacman` cannot resolve `ar0x-meta`/`calamares`; unusable ISO (RISK-048) | `build-iso.sh --build` dies on `PENDING-KEYGEN` + a missing `ar0x.db.tar.zst` (ADR-027) |
 | `SHA256SUMS` committed to Git | stale sums after every rebuild; key material leak (RISK-051) | `.gitignore` + `ar0x_iso.check_checksum()` + `checksum.sh --check` assert derived artifacts stay in `out/` |
 | QEMU UEFI launcher writes to the packaged `OVMF_VARS_4m.fd` | firmware vars corrupted for every later boot | launcher `mktemp` + `cp --` a DISPOSABLE writable copy; asserted by `ar0x_iso.check_qemu()` |

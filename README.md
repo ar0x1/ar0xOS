@@ -32,7 +32,8 @@ ran in the build sandbox (RISK-053/054):
 
 - offline GPG release keygen (`RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`),
 - building and publishing the signed `[ar0x]` package database,
-- adding `calamares` + `ar0x-meta` to `config/packages.x86_64`,
+- publishing the signed `[ar0x]` db (the ISO packages are then injected into the
+  staged profile by `build-release.sh --run`, ADR-029),
 - `mkarchiso` ISO build, QEMU BIOS/UEFI boots, real-hardware QA,
 - all **40** items of `docs/TESTING_CHECKLIST.md` (currently 0/40),
 - detached GPG signatures, GitHub Release `v0.1.0`, mirror uploads,
@@ -40,6 +41,32 @@ ran in the build sandbox (RISK-053/054):
 
 Do not trust any third-party "ar0x 0.1.0 ISO" until a release fingerprint is
 published **out of band** on this page and verified below.
+
+## Make the ISO
+
+All 12 phases are source-complete, but **no ISO exists here**: this sandbox has
+no root, no `mkarchiso`/`pacman`/`gpg`, and no access to Arch package mirrors.
+`tools/build-release.sh` therefore **fails closed** rather than fabricating a
+non-bootable file. On a real Arch host (or the privileged Arch build container
+in `docker/Dockerfile`), the whole automatable chain is one command:
+
+```bash
+# Step 0 (human, air-gapped): generate the offline release key and sign the
+# [ar0x] repo — see docs/BUILD_RELEASE_ISO.md §2. Then:
+sudo AR0X_CONFIRM_RELEASE_CHAIN=yes AR0X_CONFIRM_SIGNED_REPO=yes \
+     AR0X_CONFIRM_BUILD=yes AR0X_CONFIRM_SIGN=yes \
+     ./tools/build-release.sh --run
+```
+
+That stages the real mkarchiso profile, injects `calamares` + `ar0x-keyring` +
+`ar0x-meta` from the signed `[ar0x]` repo into the **staged profile only**
+(ADR-029), builds the ≤2.2 GiB ISO, writes `SHA256SUMS`, signs both artifacts
+and verifies them. It **never tags, uploads or announces**. Full recipes
+(Docker / Vagrant / native Arch / CI), the exact prerequisites and the MANUAL
+40/40 QA that still follows: **[`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md)**.
+
+Read-only helpers that work anywhere:
+`./tools/build-release.sh --plan`, `--preflight`, `--check`, `--self-test`.
 
 ## Verifying a release (when one exists)
 

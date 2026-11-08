@@ -217,7 +217,7 @@ do_preflight() {
     printf '  * edk2-ovmf (%s) + qemu-full for the VM gates\n' "$AR0X_ISO_QEMU_UEFI_CODE"
     printf '  * SIGNED [ar0x] db %s + published release key (currently PENDING-KEYGEN)\n' \
         "$AR0X_ISO_RELEASE_DB"
-    printf '  * config/packages.x86_64 updated with calamares + ar0x-meta (Phase 11 gate)\n'
+    printf '  * signed [ar0x] db; build-release.sh --run injects the packages into the STAGED profile only\n'
     printf '\nThen, on the host:\n'
     printf '  sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build\n'
     printf '  ./tools/checksum.sh --verify\n'
@@ -259,8 +259,20 @@ do_build() {
     [[ -f "${AR0X_REPO_DIR}/${AR0X_ISO_RELEASE_DB}" ]] \
         || die "RISK-048: signed [ar0x] db missing (${AR0X_REPO_DIR}/${AR0X_ISO_RELEASE_DB})."
 
-    log "Syncing staged profile (bootstrap.sh --sync)"
-    "$SCRIPT_DIR/bootstrap.sh" --sync
+    # ADR-029: mkarchiso consumes $AR0X_PROFILE_STAGE, NOT archiso/ directly.
+    # --sync only regenerates the 3 tracked mirrors; it NEVER creates the stage.
+    # --stage builds the disposable profile and injects calamares +
+    # ar0x-keyring + ar0x-meta there ONLY, after gpg --verify of the signed db.
+    [[ "${AR0X_CONFIRM_SIGNED_REPO:-no}" == "yes" ]] \
+        || die "Set AR0X_CONFIRM_SIGNED_REPO=yes (build-release.sh --run sets it)."
+    log "Staging disposable profile WITH the signed [ar0x] packages"
+    "$SCRIPT_DIR/bootstrap.sh" --stage --with-ar0x-repo --with-signed-packages
+    local pkg
+    for pkg in calamares ar0x-keyring ar0x-meta; do
+        grep -Fxq -- "$pkg" "${AR0X_PROFILE_STAGE}/packages.x86_64" \
+            || die "staged profile is missing ${pkg} (RISK-048: signed-repo injection failed)."
+    done
+    ok "staged profile: signed [ar0x] packages present; config/packages.x86_64 stays clean"
     mkdir -p -- "$OUT" "$AR0X_WORK_DIR"
     local epoch; epoch="$(date -u -d "${AR0X_SNAPSHOT_DATE//\//-}" +%s)"
     log "SOURCE_DATE_EPOCH=${epoch} (frozen ${AR0X_SNAPSHOT_DATE} snapshot)"

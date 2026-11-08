@@ -596,7 +596,7 @@ PHASE9_FILES=(
     packages/ar0x-meta/RELEASE
     tools/lib/ar0x_repo.py tools/setup-repo.sh docs/REPO_GUIDE.md
     ci/workflows/validate-packages.yml ci/workflows/build-packages.yml
-    ci/workflows/release.yml ci/workflows/README.md
+    ci/workflows/release.yml ci/workflows/build-iso.yml ci/workflows/README.md
 )
 for f in "${PHASE9_FILES[@]}"; do
     [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 9 deliverable: ${f}"
@@ -841,15 +841,50 @@ for f in SHA256SUMS SHA256SUMS.sig ar0x-0.1.0-x86_64.iso ar0x-0.1.0-x86_64.iso.s
     [[ ! -e "${AR0X_SOURCE_ROOT}/${f}" ]] \
         || fail "RISK-051: derived release artifact leaked into Git: ${f}"
 done
-grep -Fq 'PENDING-KEYGEN' "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT" \
-    || fail "Phase 12: release key state drifted (expected PENDING-KEYGEN here)."
-ok "Phase 12 policy gates: v0.1.0 tag, 6 artifacts, DRAFT banners, PENDING-KEYGEN, RISK-054"
+# RISK-051: accept EITHER the offline placeholder OR a real published 40-hex
+# FPR. Requiring PENDING-KEYGEN literally would BREAK validation on the very
+# host that has done the air-gapped keygen (the first real release gate).
+FPR_STATE="$(grep -v '^[[:space:]]*#' \
+    "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT" | tr -d '[:space:]')"
+if [[ "$FPR_STATE" != "PENDING-KEYGEN" ]]; then
+    [[ "$FPR_STATE" =~ ^[0-9A-Fa-f]{40}$ ]] \
+        || fail "Phase 12/RISK-051: release key must be PENDING-KEYGEN or a 40-hex FPR."
+    [[ -f "${AR0X_REPO_DIR}/${AR0X_REPO_DB}.sig" ]] \
+        || fail "RISK-048: a published FPR requires a signed [ar0x] db (${AR0X_REPO_DIR})."
+fi
+ok "Phase 12 policy gates: v0.1.0 tag, 6 artifacts, DRAFT banners, key state ${FPR_STATE:0:12}, RISK-054"
 
 # Delegate the FULL Phase 12 structural check (21 release pins, exact 6-member
 # artifact set, 5 URL pins, DRAFT/UNRELEASED gates, print-only publish driver)
 # to the shared module so both validators agree on ONE definition.
 python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_release.py" "${AR0X_SOURCE_ROOT}" \
     || fail "Phase 12 structural validation failed (tools/lib/ar0x_release.py)."
+
+# --- Section 7n: post-plan REAL-host ISO build chain ------------------------
+POST_PLAN_FILES=(
+    tools/build-release.sh tools/lib/ar0x_build_release.py
+    docs/BUILD_RELEASE_ISO.md ci/workflows/build-iso.yml
+)
+for f in "${POST_PLAN_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing post-plan deliverable: ${f}"
+done
+[[ -x "${AR0X_SOURCE_ROOT}/tools/build-release.sh" ]] \
+    || fail "Post-plan: tools/build-release.sh must be 0755."
+bash -n "${AR0X_SOURCE_ROOT}/tools/build-release.sh" \
+    || fail "Post-plan: bash -n failed on build-release.sh."
+grep -Fq -- '--stage --with-ar0x-repo --with-signed-packages' \
+    "${AR0X_SOURCE_ROOT}/tools/build-iso.sh" \
+    || fail "Post-plan/ADR-029: build-iso.sh --build must stage the real profile."
+grep -Fq 'inject_signed_packages' "${AR0X_SOURCE_ROOT}/tools/bootstrap.sh" \
+    || fail "Post-plan/ADR-029: staged-only signed-package injection is missing."
+grep -Fq 'workflow_dispatch' "${AR0X_SOURCE_ROOT}/ci/workflows/build-iso.yml" \
+    || fail "Post-plan: build-iso.yml must be workflow_dispatch-only."
+ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI"
+
+# Delegate the FULL post-plan structural check (hard gates, no tag/upload in the
+# driver, fork guard, Docker/Vagrant recipes, clean tracked package mirrors).
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_build_release.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Post-plan structural validation failed (tools/lib/ar0x_build_release.py)."
 
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then
@@ -865,6 +900,7 @@ printf '   Brand        : %s logo, %s cursors, %s\n' \
     "${AR0X_BRAND_LOGO_VIEWBOX}" "${AR0X_BRAND_CURSOR_THEME}" "${AR0X_BRAND_LICENSE}"
 printf '   Tools        : %s (welcome/update/info), SigLevel %s\n' \
     "${AR0X_TOOLS_VERSION}" "${AR0X_UPDATE_SIGLEVEL}"
-printf '   Repo         : [%s] %s, %s, builder=%s (key PENDING-KEYGEN)\n' \
-    "${AR0X_REPO_NAME}" "${AR0X_REPO_SIGLEVEL}" "${AR0X_REPO_DB}" "${AR0X_REPO_CI_BUILDER}"
+printf '   Repo         : [%s] %s, %s, builder=%s (key %s)\n' \
+    "${AR0X_REPO_NAME}" "${AR0X_REPO_SIGLEVEL}" "${AR0X_REPO_DB}" \
+    "${AR0X_REPO_CI_BUILDER}" "$FPR_STATE"
 exit 0

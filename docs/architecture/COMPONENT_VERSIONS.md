@@ -427,6 +427,13 @@ NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
     ISO/SHA256SUMS/*.sig files in the checkout; then delegate the full
     21-pin release-options parity, exact 6-member artifact set, 5 URL pins
     and print-only publish driver to `tools/lib/ar0x_release.py`.
+13. (Post-plan) Assert `tools/build-release.sh`,
+    `tools/lib/ar0x_build_release.py`, `docs/BUILD_RELEASE_ISO.md` and
+    `ci/workflows/build-iso.yml`; the 0755 driver, `bash -n`, ADR-029's
+    `bootstrap.sh --stage --with-signed-packages` call in `build-iso.sh`,
+    `inject_signed_packages`, and the dispatch-only fork-guarded CI; then
+    delegate the full hard-gate / no-tag / no-upload / clean-package-mirror
+    check to `tools/lib/ar0x_build_release.py`.
 
 `tools/setup-repo.sh --check` adds `bash -n` on all 8 PKGBUILDs, 2 `.install`
 scriptlets, 8 extensionless bash executables (including the 3 `ar0x-apply-*`

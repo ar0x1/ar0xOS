@@ -1,0 +1,158 @@
+# /home/user/ar0xOS/ci/workflows/build-iso.yml
+# -----------------------------------------------------------------------------
+# Post-plan — REAL ar0x ISO build on GitHub's infrastructure.
+#
+# workflow_dispatch ONLY. NEVER triggered by pull_request (RISK-051: a forked PR
+# must never see the offline release key). Requires repository secrets:
+#   AR0X_RELEASE_GPG_KEY   base64 of the armored OFFLINE private key
+#   AR0X_GPG_PASSPHRASE    passphrase for batch signing
+#   AR0X_RELEASE_FPR       40 uppercase hex fingerprint
+#
+# Because GitHub-hosted runners are Ubuntu, the build runs in the SAME
+# privileged Arch container as docker/Dockerfile (archiso 92-1, pacman,
+# squashfs-tools, libisoburn, syslinux, grub, gnupg, qemu-desktop, edk2-ovmf).
+# mkarchiso needs mount/mknod/chroot/loop -> --privileged is REQUIRED (RISK-016).
+#
+# ⚠️ This workflow UPLOADS THE 6 ARTIFACTS AS A WORKFLOW ARTIFACT ONLY.
+#    It NEVER creates a git tag, NEVER creates a GitHub Release, NEVER rsyncs
+#    to a mirror and NEVER announces. Publication is docs/RELEASE_GUIDE.md §4.
+# ⚠️ A workflow_dispatch workflow is triggerable only once this file is on the
+#    default branch (merge the PR first). RISK-053/054 remain MANUAL until then.
+# -----------------------------------------------------------------------------
+name: Build ar0x ISO (MANUAL / real Arch container)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Validate hosts + tooling without building or signing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-iso:
+    # Fork guard: the offline key must never be exposed to forked PR code.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'ar0x1/ar0xOS' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      AR0X_BUILD_ROOT: /opt/ar0x-build
+      AR0X_SOURCE_ROOT: /ar0xOS
+      AR0X_RELEASE_FPR: ${{ secrets.AR0X_RELEASE_FPR }}
+      AR0X_GPG_PASSPHRASE: ${{ secrets.AR0X_GPG_PASSPHRASE }}
+      AR0X_RELEASE_GPG_KEY: ${{ secrets.AR0X_RELEASE_GPG_KEY }}
+      AR0X_CONFIRM_RELEASE_CHAIN: yes
+      AR0X_CONFIRM_SIGNED_REPO: yes
+      AR0X_CONFIRM_BUILD: yes
+      AR0X_CONFIRM_SIGN: yes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate the release-key contract (never print the key)
+        run: |
+          set -euo pipefail
+          [[ -n "$AR0X_RELEASE_FPR" ]] || { echo '::error::AR0X_RELEASE_FPR secret missing'; exit 1; }
+          [[ -n "$AR0X_GPG_PASSPHRASE" ]] || { echo '::error::AR0X_GPG_PASSPHRASE secret missing'; exit 1; }
+          [[ -n "$AR0X_RELEASE_GPG_KEY" ]] || { echo '::error::AR0X_RELEASE_GPG_KEY secret missing'; exit 1; }
+          grep -Eq '^[0-9A-F]{40}$' <<< "$AR0X_RELEASE_FPR" \
+            || { echo '::error::AR0X_RELEASE_FPR is not 40 uppercase hex'; exit 1; }
+          echo "Release fingerprint contract OK (${AR0X_RELEASE_FPR:0:8}...)."
+
+      - name: Build the privileged Arch builder image
+        run: docker build -t ar0x-builder:0.1.0 -f docker/Dockerfile .
+
+      - name: Prepare the host build root
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /opt/ar0x-build/{work,out,repo/x86_64,keys/gnupg,logs,cache/pacman/pkg}
+          sudo chmod -R 0777 /opt/ar0x-build
+
+      - name: Offline validators (PR-safe chain, no secrets used)
+        run: |
+          set -euo pipefail
+          ./tools/validate-versions.sh
+          ./tools/build-release.sh --check
+          ./tools/build-release.sh --self-test
+
+      - name: Dry run — preflight only (no build, no signing)
+        if: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ./tools/build-release.sh --plan
+          ./tools/build-release.sh --preflight
+
+      - name: Build + sign the signed [ar0x] repo and the real ISO
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE":/ar0xOS:ro \
+            -v /opt/ar0x-build:/opt/ar0x-build \
+            -e AR0X_SOURCE_ROOT -e AR0X_BUILD_ROOT -e AR0X_RELEASE_FPR \
+            -e AR0X_GPG_PASSPHRASE -e AR0X_RELEASE_GPG_KEY \
+            -e AR0X_CONFIRM_RELEASE_CHAIN -e AR0X_CONFIRM_SIGNED_REPO \
+            -e AR0X_CONFIRM_BUILD -e AR0X_CONFIRM_SIGN \
+            -w /ar0xOS ar0x-builder:0.1.0 /bin/bash -euo pipefail -c '
+              set -euo pipefail
+              # Work on a COPY: the FPR file is a build input, never committed.
+              rm -rf /opt/ar0x-build/src
+              cp -a /ar0xOS /opt/ar0x-build/src
+              cd /opt/ar0x-build/src
+              export AR0X_SOURCE_ROOT=/opt/ar0x-build/src
+              export GNUPGHOME=/opt/ar0x-build/keys/gnupg
+              chmod 0700 "$GNUPGHOME"
+              # Keep the passphrase cached for the WHOLE build (mkarchiso can
+              # take hours); setup-repo.sh --sign and checksum.sh --sign then
+              # reuse the agent instead of prompting.
+              printf "default-cache-ttl 34560000\nmax-cache-ttl 34560000\nallow-loopback-pinentry\n" \
+                > "$GNUPGHOME/gpg-agent.conf"
+              gpgconf --kill gpg-agent || true
+              printf "%s" "$AR0X_RELEASE_GPG_KEY" | base64 -d \
+                | gpg --batch --yes --import
+              printf "%s\n" "$AR0X_RELEASE_FPR" \
+                > config/repo/RELEASE_KEY_FINGERPRINT
+              gpg --batch --fingerprint "$AR0X_RELEASE_FPR"
+              # Preload the agent with a dummy signature (never written to disk).
+              printf "ar0x ci signing cache warmup\n" \
+                | gpg --batch --yes --pinentry-mode loopback \
+                    --passphrase "$AR0X_GPG_PASSPHRASE" \
+                    --local-user "$AR0X_RELEASE_FPR" --clearsign > /dev/null
+              # ar0x-keyring needs the PUBLIC key; --sync recalculates its sum.
+              gpg --batch --yes --armor --export "$AR0X_RELEASE_FPR" \
+                > packages/ar0x-keyring/ar0x-public-key.asc
+              # 8 packages, ALWAYS as a non-root builder (makepkg refuses root).
+              id -u builder >/dev/null 2>&1 || useradd -m -s /bin/bash builder
+              printf "builder ALL=(ALL) NOPASSWD: ALL\n" > /etc/sudoers.d/builder
+              chown -R builder:builder /opt/ar0x-build/src
+              ./tools/setup-repo.sh --sync
+              sudo -u builder ./tools/setup-repo.sh --build
+              ./tools/setup-repo.sh --sign
+              ./tools/setup-repo.sh --verify "$AR0X_BUILD_ROOT/repo/x86_64"
+              # Real mkarchiso build + size gate + checksums + detached sigs.
+              ./tools/build-release.sh --run
+            '
+
+      - name: Upload the 6 release artifacts (NOT a GitHub Release)
+        if: ${{ !inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ar0x-0.1.0-x86_64-iso
+          path: |
+            /opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso
+            /opt/ar0x-build/out/SHA256SUMS
+            /opt/ar0x-build/out/SHA256SUMS.sig
+            /opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso.sig
+            /opt/ar0x-build/out/CHANGELOG.md
+            /opt/ar0x-build/out/README.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remaining MANUAL gates
+        run: |
+          echo "::warning::QEMU BIOS+UEFI, disposable-qcow2 install, 40/40 checklist, real-hardware QA are MANUAL (RISK-004/052/053)."
+          echo "::warning::Tag v0.1.0 + gh release create --verify-tag + mirrors + announcement are MANUAL (RISK-054)."
+          echo "This workflow NEVER tagged, released, mirrored or announced anything."

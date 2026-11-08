@@ -167,7 +167,7 @@ do_preflight() {
     section "Phase 12 — MANUAL pre-publication gates (print only, NEVER publishes)"
     printf '  1. Air-gapped --keygen; commit + publish the 40-hex FPR OUT OF BAND (RISK-051).\n'
     printf '  2. Build, sign and publish the signed [ar0x] db; DNS + TLS for repo.ar0x.dev.\n'
-    printf '  3. Add calamares + ar0x-meta to config/packages.x86_64; bootstrap.sh --sync.\n'
+    printf '  3. build-release.sh --run stages the profile + injects calamares/ar0x-meta (ADR-029).\n'
     printf '  4. sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build (<= 2362232012 bytes).\n'
     printf '  5. ./tools/checksum.sh --create -> --sign -> --verify (RISK-015).\n'
     printf '  6. docs/TESTING_CHECKLIST.md 40/40 PASS (100%%), QEMU BIOS+UEFI, real hardware QA.\n'

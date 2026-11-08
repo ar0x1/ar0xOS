@@ -54,6 +54,7 @@ jobs:
           ./tools/configure-installer.sh --check
           ./tools/build-iso.sh --check
           ./tools/prepare-release.sh --check
+          ./tools/build-release.sh --check
 
       - name: Phase 9 offline self-test (mock signed repo)
         run: |
@@ -79,6 +80,12 @@ jobs:
           ./tools/prepare-release.sh --sync
           python3 tools/lib/ar0x_release.py "$PWD" --self-test
           ./tools/prepare-release.sh --self-test
+
+      - name: Post-plan offline self-test (REAL disposable mkarchiso --stage)
+        run: |
+          set -euo pipefail
+          python3 tools/lib/ar0x_build_release.py "$PWD" --self-test
+          ./tools/build-release.sh --self-test
 
       - name: No private-key material in the tree
         run: |

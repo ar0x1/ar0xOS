@@ -99,6 +99,7 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 10 | ⚠️ **RISK-004** (CRITICAL: destructive partitioning — `lsblk` + TYPED device + disposable VM disk), **RISK-052** (GUI NEVER launched), **RISK-003** (Codeberg 3.4.3 only), **RISK-048/051** (no signed repo → `calamares` not on ISO), RISK-013 (NOPASSWD guard), RISK-033 (empty-password live user), RISK-010 (official-only groups) |
 | 11 | ⚠️ **RISK-053** (NO ISO built/booted/hashed/signed), ⚠️ **RISK-004** (destructive partitioning), **RISK-048/051** (no signed repo / release key), **RISK-052** (GUI never rendered), RISK-005, RISK-007, RISK-009, RISK-012, RISK-015, RISK-003 |
 | 12 | ⚠️ **RISK-054** (NOTHING released), ⚠️ **RISK-051** (key custody + FPR out of band), **RISK-048/053** (no signed repo / ISO), RISK-015 (signature mismatch), RISK-050 (reserved endpoints), RISK-011 |
+| Post-plan | ⚠️ **RISK-053/054** (still NO ISO), **RISK-048/051** (key + signed db), RISK-016 (privileged container), RISK-004 (QEMU install) |
 
 ---
 
@@ -171,6 +172,14 @@ These exact warnings will be repeated at the start of the corresponding phase re
     publish it OUT OF BAND in `README.md`, a website and a keyserver (RISK-051).
 30. **Never** send the DistroWatch draft without a real direct ISO URL; the
     submission needs exactly 4 fields and goes on a waiting list.
+31. **Never** add `calamares`, `ar0x-keyring` or `ar0x-meta` to the TRACKED
+    `config/packages.x86_64` / `archiso/packages.x86_64` to "finish" the ISO:
+    `bootstrap.sh --stage --with-signed-packages` injects them into the
+    DISPOSABLE staged profile ONLY, after a `gpg --verify`-passing signed db
+    (ADR-029, RISK-048/051).
+32. **Never** fabricate a placeholder `.iso` in a sandbox without `mkarchiso`,
+    `pacman`, root and Arch mirrors; `build-release.sh --run` FAILS CLOSED
+    instead (RISK-053/054).
 
 ---
 
@@ -203,5 +212,11 @@ v0.1 is a **developer preview**. The residual risks accepted at release are:
 - **Nothing was released (RISK-054).** No `v0.1.0` tag, GitHub Release,
   mirror upload, announcement or DistroWatch submission exists. Phase 12
   delivered only the print-only tooling and DRAFT/UNRELEASED templates.
+
+- **The real ISO was still NOT built here (RISK-053/054).**
+  `tools/build-release.sh --run` is the one-command path on a real Arch host,
+  but the Arena sandbox has no root, no Linux capabilities, no `mkarchiso`/
+  `pacman`/`gpg` and no Arch mirror access. `--self-test` really stages a
+  mkarchiso profile offline; it never produces or claims an ISO.
 
 Each of these is a candidate for v0.2 / v1.0 in the Phase 12 roadmap.

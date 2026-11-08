@@ -62,6 +62,7 @@ LOG_FILE="${AR0X_LOG_DIR}/02-bootstrap.log"
 MODE="build"
 MKISO_MODES="bootstrap iso"
 FORCE_REPO=""
+SIGNED_PACKAGES="no"
 CHROOT_CMD=()
 
 usage() {
@@ -71,6 +72,14 @@ ar0x Phase 3 — bootstrap.sh
   (no args)            Full base bootstrap: stage profile + mkarchiso + lockfile.
   --check              Read-only validation. No root, no writes.
   --sync               Regenerate the 3 generated files in archiso/ from config/.
+  --stage              Stage the DISPOSABLE profile at \$AR0X_PROFILE_STAGE
+                       (no root, no mkarchiso) so build-iso.sh can build it.
+  --with-signed-packages
+                       ⚠️ Only with --stage. Inject calamares + ar0x-keyring +
+                       ar0x-meta into the STAGED profile ONLY (never into the
+                       tracked config/packages.x86_64). Requires
+                       AR0X_CONFIRM_SIGNED_REPO=yes, a published 40-hex FPR,
+                       a signed [ar0x] db AND gpg --verify of that db (RISK-048/051).
   --clean              ⚠️ Delete /opt/ar0x-build/work (asks for confirmation).
   --base-only          mkarchiso -m bootstrap (minimal root tarball only).
   --iso-only           mkarchiso -m iso (ISO + chroot-able airootfs).
@@ -92,6 +101,8 @@ while (( $# > 0 )); do
     case "$1" in
         --check)           MODE="check" ;;
         --sync)            MODE="sync" ;;
+        --stage)           MODE="stage" ;;
+        --with-signed-packages) SIGNED_PACKAGES="yes" ;;
         --clean)           MODE="clean" ;;
         --base-only)       MKISO_MODES="bootstrap" ;;
         --iso-only)        MKISO_MODES="iso" ;;
@@ -285,7 +296,7 @@ stage_profile() {
         warn "[ar0x] repo block DROPPED from the staged pacman.conf: no repo db yet (ADR-017)."
         warn "Phase 11's build-iso.sh re-adds it after Phases 8/9 build the HARD-pinned packages."
     else
-        ok "[ar0x] repo block kept (found a repo db in ${AR0X_REPO_DIR})"
+        ok "[ar0x] repo block kept (signed db in ${AR0X_REPO_DIR} / --with-ar0x-repo)"
     fi
 
     # 1:1 overlay rule (BUILD_LAYOUT.md §4). These are no-ops in Phase 3 (only
@@ -348,6 +359,48 @@ stage_profile() {
 
     find "$STAGE/airootfs" -type f -name '.gitkeep' -delete 2>/dev/null || true
     ok "Staged profile ready (work/ and the Git checkout stay clean)"
+}
+
+# --- Section 5b: signed-repo package injection (STAGED PROFILE ONLY) --------
+# ADR-029: config/packages.x86_64 is the CANONICAL, offline-validated source and
+# MUST stay free of ar0x-*/calamares (RISK-048/051). mkarchiso consumes the
+# disposable $STAGE profile, so the three signed-repo packages are appended to
+# $STAGE/packages.x86_64 ONLY, after the signed db has been verified with gpg.
+# This removes the last manual "edit config/packages.x86_64" release gate.
+inject_signed_packages() {
+    section "Injecting signed [ar0x] packages into the DISPOSABLE staged profile"
+    [[ "${AR0X_CONFIRM_SIGNED_REPO:-no}" == "yes" ]] \
+        || die "Set AR0X_CONFIRM_SIGNED_REPO=yes to enable signed-repo packages."
+    [[ "$MODE" == "stage" ]] || die "--with-signed-packages requires --stage."
+
+    local fpr
+    fpr="$(grep -v '^[[:space:]]*#' \
+           "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT" | tail -1 | tr -d '[:space:]')"
+    [[ "$fpr" != "PENDING-KEYGEN" && "$fpr" =~ ^[0-9A-Fa-f]{40}$ ]] \
+        || die "RISK-051: a published 40-hex release fingerprint is required (found '${fpr}')."
+
+    local db="${AR0X_REPO_DIR}/${AR0X_REPO_DB}"
+    [[ -f "$db" ]] || die "RISK-048: signed [ar0x] db missing: ${db}"
+    [[ -f "${db}.sig" ]] || die "RISK-048: db signature missing: ${db}.sig"
+    require_command gpg
+    gpg --verify "${db}.sig" "$db" >/dev/null 2>&1 \
+        || die "RISK-048: gpg --verify FAILED on ${db}.sig — do NOT build an ISO."
+
+    grep -q '^\[ar0x\]$' "${STAGE}/pacman.conf" \
+        || die "staged pacman.conf lost the [ar0x] block (pass --with-ar0x-repo)."
+    grep -Fq "file://${AR0X_REPO_DIR}" "${STAGE}/pacman.conf" \
+        || die "staged pacman.conf does not point at ${AR0X_REPO_DIR}."
+
+    local list="${STAGE}/packages.x86_64"
+    local pkg
+    for pkg in calamares ar0x-keyring ar0x-meta; do
+        if ! pkg_in_list "$list" "$pkg"; then
+            printf '%s\n' "$pkg" >> "$list"
+        fi
+    done
+    ok "staged profile installs calamares + ar0x-keyring + ar0x-meta from [ar0x]"
+    warn "config/packages.x86_64 stays CLEAN — offline validators keep the RISK-048 gate."
+    warn "The [ar0x] build-time SigLevel is Optional TrustAll; the INSTALLED system is Required."
 }
 
 # --- Section 6: run mkarchiso ------------------------------------------------
@@ -434,6 +487,23 @@ case "$MODE" in
         printf 'Would create: %s/x86_64/airootfs  (arch-chroot target)\n' "$AR0X_WORK_DIR"
         printf 'Would create: %s/packages.lock\n' "$AR0X_OUT_DIR"
         printf '\n%s✅ Phase 3 --check PASSED%s\n' "$_AR0X_C_OK" "$_AR0X_C_RST"
+        exit 0
+        ;;
+    stage)
+        # Real, offline-safe staging of the disposable mkarchiso profile.
+        sync_profile_files
+        validate_static
+        assert_clean
+        stage_profile
+        if [[ "$SIGNED_PACKAGES" == "yes" ]]; then
+            inject_signed_packages
+        else
+            ok "staged profile has NO ar0x-*/calamares packages (offline-safe)"
+        fi
+        section "STAGE MODE — no root, no mkarchiso, no ISO produced"
+        printf 'Staged profile : %s\n' "$STAGE"
+        printf 'Build root     : %s\n' "$AR0X_BUILD_ROOT"
+        printf 'Next (real Arch host, root): %s/build-release.sh --run\n' "$AR0X_TOOLS_DIR"
         exit 0
         ;;
     sync)

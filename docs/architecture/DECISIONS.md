@@ -894,6 +894,52 @@ submitted.
 **Tradeoffs accepted:** source-complete but artifact-incomplete release; all
 six publication gates are human. **Reversal cost:** LOW (documents + tools only).
 
+## ADR-029 — Real-host ISO build chain + staged-profile package injection
+
+**Status:** ACCEPTED · 2026-11-03 · post-plan completion driver.
+
+**Context.** All 12 phases are source-complete, but `docs/TESTING_CHECKLIST.md`
+is 0/40 and no ISO exists (RISK-053/054). Two concrete defects blocked a real
+build on a real Arch host:
+
+1. `tools/build-iso.sh --build` called `bootstrap.sh --sync`, which only
+   regenerates 3 tracked mirrors and **never creates** `$AR0X_PROFILE_STAGE`;
+   `mkarchiso` would have received a missing/stale profile.
+2. A human was told to edit `config/packages.x86_64` to add `calamares` +
+   `ar0x-meta` — but every offline validator deliberately FORBIDS those lines
+   until the signed `[ar0x]` db exists (RISK-048/051), so the "fix" would break
+   validation and be committed by mistake.
+3. `validate-versions.sh §7m` required the literal `PENDING-KEYGEN`, so the
+   first real release gate (air-gapped keygen) would have made every validator
+   FAIL.
+
+**Decision.**
+
+| Contract | Implementation |
+|---|---|
+| Real staging | new `bootstrap.sh --stage` builds `$AR0X_PROFILE_STAGE` offline (no root, no mkarchiso); `build-iso.sh --build` calls `--stage --with-ar0x-repo --with-signed-packages` |
+| Signed packages | `inject_signed_packages()` appends `calamares` + `ar0x-keyring` + `ar0x-meta` to the **staged** `packages.x86_64` ONLY, after `AR0X_CONFIRM_SIGNED_REPO=yes`, a published 40-hex FPR, a `gpg --verify`-passing db + `.sig`, and an `[ar0x]` block in the staged `pacman.conf` |
+| One entry point | `tools/build-release.sh --run` chains validate → verify repo → sync → build → sign → verify → release-contract; `--plan/--preflight/--check/--self-test` are read-only |
+| Fail closed | `--run` refuses without root, `mkarchiso`/`pacman`/`gpg`/`repo-add`, a 40-hex FPR, a `gpg --verify`-passing db and the offline secret key. It NEVER tags, uploads or announces |
+| Key state | validators accept `PENDING-KEYGEN` **or** a published 40-hex FPR (with a signed db in the latter case) |
+| CI | `ci/workflows/build-iso.yml` is `workflow_dispatch`-only with a fork guard; runs the privileged Arch container and uploads 6 artifacts as a workflow artifact, NEVER a GitHub Release |
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Staged-only injection ✅** | tracked sources stay clean, offline validators keep their RISK-048 gate, no manual edit | needs `--stage` before `mkarchiso` |
+| Edit `config/packages.x86_64` | obvious | breaks every validator, risks committing unsigned packages (RISK-048/051) |
+| Auto-keygen in CI | fully automated | violates the air-gapped offline-key model (RISK-051) |
+| Fabricate a placeholder ISO here | "something to show" | non-bootable, a false claim; explicitly rejected (RISK-053/054) |
+
+**Enforcement.** `tools/lib/ar0x_build_release.py` (9 negative mutation tests),
+`./tools/build-release.sh --self-test` (a REAL disposable `bootstrap.sh --stage`
+in `/tmp`, with a stub `gpg` used only for plumbing; PENDING-KEYGEN refuses
+injection), `validate-versions.sh §7n`, and the PR-safe CI step.
+
+**Tradeoffs accepted:** the ISO still cannot be produced in the Arena sandbox;
+the human must supply the offline key and run `--run` on a real Arch host.
+**Reversal cost:** LOW (new scripts + doc updates, no tracked package list edit).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -926,3 +972,4 @@ six publication gates are human. **Reversal cost:** LOW (documents + tools only)
 | 026 Real Calamares `show/exec/show` + offline groups + symlink first boot | an actually runnable 3.4.3 installer, zero `pacman -Sy`, ADR-024 one owner | 22 exec jobs, first-boot unit dangling until P11, no live GUI QA (RISK-052) |
 | 027 Size-gate-first ISO build + sha256-only signatures + disposable VMs | no unverifiable release, gate really testable offline, zero host-disk risk | no ISO here; 0/40 checklist until MANUAL Phase 11 QA (RISK-053) |
 | 028 Print-only release driver + exact 6-artifact set + DRAFT banners | zero false claims, no irreversible accidental upload, FPR out of band | no tag/upload/announcement here (RISK-054); all publication is MANUAL |
+| 029 Real `--stage` + staged-only signed packages + one `--run` chain | fixes 3 real blockers, tracked sources stay clean, fails closed | still needs a human key + real Arch host; NO ISO in this sandbox |

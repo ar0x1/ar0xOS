@@ -728,6 +728,7 @@ must publish Calamares 3.4.3 from the Codeberg tarball, add it with
 | Listing | DistroWatch submission draft (Phase 12) |
 | EOL | `stable` ISO supported until the next stable + 1 month |
 | Phase 12 status | ✅ Source-complete (ADR-028): README, changelog, 21 release pins, 5 release docs, print-only driver + validator. ⚠️ **NOT RELEASED** — RISK-054; `--publish` NEVER uploads; see `docs/RELEASE_GUIDE.md` |
+| Post-plan completion | ✅ ADR-029: `tools/build-release.sh --run` (one command on a real Arch host), `bootstrap.sh --stage`, staged-only signed-package injection, `ci/workflows/build-iso.yml`, `docs/BUILD_RELEASE_ISO.md`, `validate-versions.sh §7n`. ⚠️ **STILL NO ISO** — no root/mkarchiso/Arch mirrors here; `--run` fails closed |
 
 ---
 
@@ -896,7 +897,8 @@ Steps that **cannot** be automated, flagged here per the output rules:
    (`ar0x-info`, `ar0x-update`, `ar0x-firstboot`, `ar0x-apparmor-ctl`) are
    `bash -n` checked by `tools/configure-tools.sh --check`.
 9. **§15 row 12 exit gate:** tag `v0.1.0` published with all 6 artifacts and
-   detached signatures. ⚠️ **NOT MET — MANUAL (RISK-054):** Phase 12 delivered
+   detached signatures (ADR-029: `tools/build-release.sh --run` now automates
+   steps 1–7 on a real Arch host, but was NOT run here). ⚠️ **NOT MET — MANUAL (RISK-054):** Phase 12 delivered
    `README.md`, `CHANGELOG.md` (UNRELEASED), 21 release pins, the upload guide,
    the announcement / DistroWatch / roadmap DRAFTS and a print-only release
    driver, all offline-validated. But NO tag, GitHub Release, mirror upload,

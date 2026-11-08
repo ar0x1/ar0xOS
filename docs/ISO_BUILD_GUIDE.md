@@ -6,6 +6,9 @@ isolinux (BIOS) · frozen Arch snapshot `2026/11/01` · size gate **≤ 2.2 GB**
 **Status:** ✅ build tooling, size gate, checksum/signature tooling, QEMU/VBox/
 VMware procedures and the 40-item checklist COMPLETE (ADR-027). ⚠️ **NO ISO was
 built, booted, hashed or signed here** — see the warnings below.
+**Post-plan (ADR-029):** `tools/build-release.sh --run` is the one-command real-host
+chain; `bootstrap.sh --stage` really builds the disposable mkarchiso profile and
+injects the signed-repo packages there only. Full recipes: `docs/BUILD_RELEASE_ISO.md`.
 
 > ⚠️ **RISK-053 (HIGH):** `mkarchiso`, `qemu-system-x86_64`, `qemu-img`,
 > `edk2-ovmf`, `xorriso`, `gpg`, KVM, loop devices and root are ALL absent in

@@ -54,11 +54,16 @@ artifacts (`*.iso`, `SHA256SUMS*`, `*.sig`, `packages.lock`, `*.gpg`) stay in
    → `--verify`. (RISK-051)
 2. **Publish the signed `[ar0x]` db**; provision DNS + TLS for
    `repo.ar0x.dev`; `pacman-key --init` + `--populate ar0x` on a test host.
-3. **Add `calamares` + `ar0x-meta`** to `config/packages.x86_64` and re-run
-   `bootstrap.sh --sync` (Phase 11 gate).
-4. **Build the ISO** on a real Arch host:
-   `sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build` (≤ `2362232012`
-   bytes, `SOURCE_DATE_EPOCH` from `2026/11/01`). (RISK-053)
+3. ~~Add `calamares` + `ar0x-meta` to `config/packages.x86_64`~~ — now
+   AUTOMATED (ADR-029): `tools/build-release.sh --run` calls
+   `bootstrap.sh --stage --with-signed-packages`, which injects `calamares` +
+   `ar0x-keyring` + `ar0x-meta` into the DISPOSABLE staged profile ONLY after
+   `gpg --verify` of the signed db. The tracked package mirrors stay clean.
+4. **Build the ISO** on a real Arch host — ONE command:
+   `sudo AR0X_CONFIRM_RELEASE_CHAIN=yes AR0X_CONFIRM_SIGNED_REPO=yes AR0X_CONFIRM_BUILD=yes AR0X_CONFIRM_SIGN=yes ./tools/build-release.sh --run`
+   (stages the real profile, `mkarchiso`, ≤ `2362232012` bytes,
+   `SOURCE_DATE_EPOCH` from `2026/11/01`, `SHA256SUMS`, detached signatures,
+   fresh verification). See `docs/BUILD_RELEASE_ISO.md`. (RISK-053)
 5. **Checksums + signatures**:
    `./tools/checksum.sh --create` → `AR0X_CONFIRM_SIGN=yes ./tools/checksum.sh --sign`
    → `./tools/checksum.sh --verify`. (RISK-015)
@@ -173,6 +178,8 @@ DistroWatch source: <https://distrowatch.com/dwres.php?resource=submit>
 | `python3 tools/lib/ar0x_release.py . --self-test` | ✅ 8 negative mutations + REAL artifact-set assembly |
 | `./tools/validate-versions.sh` (incl. §7m), full Phase 1–11 gate chain | ✅ PASS |
 | `bash -n`, Python AST, `git diff --check`, `--sync` idempotency | ✅ PASS |
+| `./tools/build-release.sh --check/--plan/--preflight/--self-test` | ✅ PASS (REAL disposable `bootstrap.sh --stage`, no ISO) |
+| `python3 tools/lib/ar0x_build_release.py . --self-test` | ✅ 9 negative mutations |
 
 ⚠️ NOT performed: `git tag`, `gh release create`, `rsync`, `gpg --detach-sign`
 on real artifacts, `curl -IL`, DistroWatch email, announcement, any ISO build.
