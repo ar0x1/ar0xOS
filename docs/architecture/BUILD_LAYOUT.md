@@ -140,6 +140,10 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   ├── installer/                             # Phase 10 — NON-etc assets
 │   │   ├── ar0x-installer-finish               # → /usr/lib/ar0x/ (0755)
 │   │   └── ar0x-installer.desktop             # → /usr/share/applications/
+│   ├── iso/                                   # Phase 11 ✅ CANONICAL
+│   │   ├── build-options.conf                 # 16 pins: 2.2 GiB gate, OVMF, hashes
+│   │   ├── size-budget.conf                   # 8 §7 rows (1890 MiB compressed)
+│   │   └── run-qemu-{bios,uefi,install}.sh   # 0755 VM launchers (RISK-004)
 │   └── repo/
 │       ├── pacman.conf.ar0x-entry               # Phase 9 — snippet appended to installed conf
 │       └── repo-options.conf                    # Phase 9 — repo-add options
@@ -322,6 +326,9 @@ logic other than the three explicit renames below:
 | `config/calamares/branding/ar0x/**` | `/etc/calamares/branding/ar0x/**` (Calamares prefers `/etc`; a disposable `/usr/share` copy is staged in `build/installer-prefix` for tests only) |
 | `config/installer/ar0x-installer-finish` | `/usr/lib/ar0x/ar0x-installer-finish` (`0755`) |
 | `config/installer/ar0x-installer.desktop` | `/usr/share/applications/ar0x-installer.desktop` (`0644`) |
+| `config/iso/**` | NO target path — build-time inputs only; `--sync` stages a disposable `build/iso-prefix/` (gitignored) |
+| `tools/build-iso.sh` → `mkarchiso` | `/opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso` (gitignored, `2362232012`-byte gate) |
+| `tools/checksum.sh --create/--sign` | `/opt/ar0x-build/out/{SHA256SUMS,SHA256SUMS.sig,<iso>.sig}` (gitignored) |
 | `assets/plymouth/ar0x/**` | `/usr/share/plymouth/themes/ar0x/**` |
 | `assets/grub-theme/ar0x/**` | `/boot/grub/themes/ar0x/**` |
 | `assets/sddm/ar0x/**` | `/usr/share/sddm/themes/ar0x/**` |

@@ -413,6 +413,13 @@ NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
     ADR-024 no-duplicate-`/etc/calamares` rule; then delegate the full
     show/exec/show + 21 module configs + 8 palette pins + 3 official-only
     package groups + RISK-013 finish wiring to `tools/lib/ar0x_installer.py`.
+11. (Phase 11) Assert all 8 `AR0X_ISO_*` / `AR0X_RELEASE_*` version keys,
+    all 11 Phase 11 deliverables, the `2362232012`-byte size gate in
+    `config/iso/build-options.conf`, the 40-item / 100% checklist gate,
+    `0755` modes on the driver + 3 QEMU launchers, the RISK-004 typed-device
+    gate and gitignored `SHA256SUMS`; then delegate the full archiso 92
+    profile, 8-row size budget, package policy, 3 launchers, checksum
+    contract and 40 ordered items to `tools/lib/ar0x_iso.py`.
 
 `tools/setup-repo.sh --check` adds `bash -n` on all 8 PKGBUILDs, 2 `.install`
 scriptlets, 8 extensionless bash executables (including the 3 `ar0x-apply-*`

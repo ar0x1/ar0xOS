@@ -1,8 +1,8 @@
 # ar0x — Architecture & Project Plan
 
 > **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
-> Document version: `1.10.0` · Date: `2026-11-07` · Repository: `ar0x1/ar0xOS`
-> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–10 complete; Phase 11 awaiting confirmation**
+> Document version: `1.11.0` · Date: `2026-11-08` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–11 complete; Phase 12 awaiting confirmation**
 >
 > All versions in this document were verified against upstream releases on 2026-11-03.
 > Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
@@ -507,6 +507,14 @@ repo-add + sign → calamares config → mkarchiso build → QEMU smoke → chec
 `airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '15' '-b' '1M')`,
 and `tools/build-iso.sh` enforces the 2.2 GB gate with `stat -c %s`.
 
+**Phase 11 ✅ COMPLETE (ADR-027):** `tools/build-iso.sh --build` implements that
+gate (`2362232012` bytes), sets `SOURCE_DATE_EPOCH` from the frozen snapshot,
+runs `mkarchiso -v -m iso`, and REFUSES to build until a published release key
+and a signed `[ar0x]` db exist. `config/iso/size-budget.conf` encodes these 8
+rows verbatim (1890 MiB compressed, 362 MiB headroom); `ar0x_iso.py --self-test`
+really exercises the gate with sparse `gate+1` / `gate-1` files. `docs/TESTING_CHECKLIST.md`
+is the 40-item / 100% exit gate.
+
 ---
 
 ## 8. Boot, theme & installer architecture
@@ -745,6 +753,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-024 | ONE OWNER PER PATH: airootfs overlay owns 92 ISO paths; 5 P9 packages install `/usr/share/ar0x/<pkg>/**` + 3 user-space `ar0x-apply-*` helpers; PR-safe CI with zero secrets | all 8 PKGBUILDs buildable with zero pacman file conflicts vs. duplicate theme data on disk and a second copy step for stock-Arch users |
 | ADR-025 | ar0x-only naming: codename `ar0x root` / `ar0x-root`, boot art `AR0X ROOT`, default wallpaper `ar0x-grid.png`, whole-tree naming gate | one self-referential brand enforced by `validate-versions.sh §7j` vs. 72 files + 3 binary renames and repetitive `(ar0x root)` wording |
 | ADR-026 | Calamares 3.4.3 `show/exec/show` real sequence, `/etc/calamares` branding, offline `packagechooser` groups, `initcpiocfg/initcpio`, plain-symlink first-boot arming | a real installable sequence + zero `pacman -Sy` + no second config copy vs. a 22-job exec phase, a dangling first-boot unit until Phase 11, and no live GUI QA |
+| ADR-027 | Size-gate-first ISO build: refuse `--build` without a signed repo, sha256-only release artifacts, disposable OVMF vars + qcow2, 40-item 100% checklist | no unverifiable release and zero host-disk risk vs. a build that cannot run in this sandbox and a checklist that stays 0/40 until Phase 11 QA is manual |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -777,6 +786,7 @@ Full register with mitigations and trigger conditions:
 | RISK-050 | LOW | 5 reserved welcome link endpoints + `repo.ar0x.dev`; `/tree/main/docs` needs the PR merged (P12) |
 | RISK-051 | ⚠️ CRITICAL | Offline private release key + CI signing secrets: leakage or a bad published signature is a security incident. `PENDING-KEYGEN`, empty `ar0x-trusted`, PR workflows with ZERO secrets, protected `release` Environment, fork guard, gitignored key artifacts |
 | RISK-052 | ⚠️ HIGH | Phase 10 installer never rendered/booted: no Qt6/QML/Wayland/QEMU/KVM/root here; config, branding, first-boot wiring and offline self-tests only (P10 → P11) |
+| RISK-053 | ⚠️ HIGH | No ISO built, booted, hashed or signed: `mkarchiso`, QEMU, `edk2-ovmf`, `gpg`, KVM, loop devices and root are absent; `docs/TESTING_CHECKLIST.md` is 0/40 unchecked (P11 → MANUAL) |
 
 ---
 
@@ -803,8 +813,11 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 10 | ⚠️ Walk the installer flow: `lsblk -o NAME,SIZE,MODEL,TRAN`, TYPE the target device, disposable QEMU disk ONLY | You | ⚠️ RISK-004, destructive, irreversible |
 | 10 | Build/publish Calamares 3.4.3 (Codeberg tarball + detached `.asc`) to the signed `[ar0x]` repo; add `calamares` + `ar0x-meta` to `config/packages.x86_64` | You | RISK-003/048/051; Phase 11 gate |
 | 10 | Launch the GUI on a real Arch live ISO; full install → reboot → `ar0x-welcome` first login; `calamares -d` debug log | You | ⚠️ RISK-052; no Qt6/QML/Wayland/KVM/display/root here |
-| 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox |
-| 11 | Confirm SHA256 + GPG signature of the final ISO | You | Release gate |
+| 11 | Real Arch host, root, loop devices, `mkarchiso`/`xorriso`/`qemu-full`/`edk2-ovmf`/`gpg`; `sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build` | You | ⚠️ RISK-053; destructive scratch, needs the signed `[ar0x]` db first |
+| 11 | `AR0X_CONFIRM_SIGN=yes ./tools/checksum.sh --sign` → `--verify`, then QEMU BIOS + UEFI boots and the disposable-qcow2 installer VM | You | ⚠️ RISK-004/048/051/052; no QEMU/KVM/gpg here |
+| 11 | Walk all 40 items of `docs/TESTING_CHECKLIST.md` to **100%**, incl. real-hardware WiFi/BT/audio/GPU and VBox/VMware | You | Acceptance criteria 1–4; aesthetic + hardware judgment |
+| 11 | Confirm SHA256 + GPG signature of the final ISO from a fresh download | You | Release gate (RISK-051) |
+| 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox; see the 4 Phase 11 rows above |
 | 12 | Upload to mirrors, submit DistroWatch form, publish announcement | You | External accounts |
 
 ---
@@ -825,7 +838,7 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | **8** | Custom ar0x Tools ✅ | `ar0x-welcome` (GTK4/PyGObject, lazy `gi`), `ar0x-update` (non-root, SigLevel-verified), `ar0x-info` (fastfetch + pure-Bash fallback), 3 `.desktop` files, 3 PKGBUILDs with real SHA-256 sums, 2 systemd units, RISK-013/008 helpers, `config/tools/**`, `tools/configure-tools.sh`, `tools/lib/ar0x_pkgbuild.py`, `docs/TOOLS_GUIDE.md`, ADR-023, 5 Phase 9 skeletons | `configure-tools.sh --check/--sync/--self-test` + `validate-versions.sh` pass; all three run offline; GTK4 render + `makepkg`/`namcap` are manual |
 | **9** | Package Repository ✅ | **All 8** PKGBUILDs (57/57 sums), ADR-024 one-owner-per-path + 3 `ar0x-apply-*` helpers, `ar0x-keyring` trust bootstrap, `config/repo/**` policy (12 options), 14 `versions.env` keys, `tools/setup-repo.sh`, `tools/lib/ar0x_repo.py`, 3 GitHub Actions workflows (PR-safe / build / release), `docs/REPO_GUIDE.md`, ADR-024, RISK-051 | `setup-repo.sh --check/--sync/--self-test`, `ar0x_repo.py` (+ `--self-test`), `ar0x_pkgbuild.py`, `validate-versions.sh`, `bash -n`, Python AST, `git diff --check` pass. ⚠️ keygen/signing/publication/`makepkg` are MANUAL; no signed repo exists |
 | **10** | Installer ✅ | Calamares 3.4.3 `settings.conf` (show/exec/show, 3 instances, 22 exec jobs), **21** module configs, ar0x `branding.desc` + `show.qml` + logo mirror, `ar0x-installer-finish` first-boot arming, `pkexec` launcher, `tools/configure-installer.sh`, `tools/lib/ar0x_installer.py`, `docs/INSTALLER_FLOW.md`, ADR-026, RISK-052 | `configure-installer.sh --check/--sync/--self-test` + `ar0x_installer.py` (9 negative tests + REAL helper run), `validate-versions.sh §7k`, `git diff --check` PASS. ⚠️ Full install → reboot → `ar0x-welcome` is a **MANUAL Phase 11 QEMU gate**; GUI never launched here (RISK-052) |
-| 11 | ISO Build & Testing | `tools/build-iso.sh`, `tools/checksum.sh`, QEMU UEFI/BIOS cmds, VBox/VMware steps, `docs/TESTING_CHECKLIST.md` | Checklist 100% pass; ISO < 2.2 GB |
+| **11** | ISO Build & Testing ✅ | `tools/build-iso.sh` (`--check/--sync/--self-test/--preflight/--size-report/--qemu-*/--build`), `tools/checksum.sh` (`--check/--create/--verify/--sign/--self-test`), `tools/lib/ar0x_iso.py`, `config/iso/**` (16 option pins, 8 budget rows, 3 `0755` QEMU launchers), `docs/ISO_BUILD_GUIDE.md`, **40-item** `docs/TESTING_CHECKLIST.md`, ADR-027, RISK-053 | `build-iso.sh --check/--sync/--self-test`, `ar0x_iso.py` (9 negative tests + REAL sparse 2.2 GiB gate), `checksum.sh --self-test` (REAL create/verify/tamper round-trip), `validate-versions.sh §7l`, `git diff --check` PASS. ⚠️ **NO ISO built/booted/hashed/signed** — checklist is 0/40 and all QEMU/hardware items are MANUAL (RISK-053/048/051) |
 | 12 | Release & Distribution | `README.md`, announcement template, upload guide, DistroWatch draft, roadmap template | Tag `v0.1.0` published with signatures |
 
 ---
@@ -833,8 +846,13 @@ Steps that **cannot** be automated, flagged here per the output rules:
 ## 16. v0.1 acceptance criteria
 
 1. `ar0x-0.1.0-x86_64.iso` boots to a Hyprland Wayland session under **both** QEMU UEFI
-   (`-bios OVMF`) and QEMU BIOS (SeaBIOS).
-2. ISO size ≤ 2.2 GB; `SHA256SUMS` and detached GPG signature verify.
+   (`-bios OVMF`) and QEMU BIOS (SeaBIOS). ⚠️ **P11 TOOLING COMPLETE, RUNTIME OPEN:**
+   `config/iso/run-qemu-{bios,uefi}.sh` and `docs/TESTING_CHECKLIST.md §D/§E` are
+   delivered and structurally validated, but no ISO or VM exists here (RISK-053).
+2. ISO size ≤ 2.2 GB; `SHA256SUMS` and detached GPG signature verify. ⚠️ The
+   `2362232012`-byte gate is implemented and really tested with sparse files
+   (`ar0x_iso.py --self-test`), `checksum.sh` does a real create/verify/tamper
+   round-trip, but **no real ISO was hashed or signed** (`PENDING-KEYGEN`, RISK-051).
 3. Calamares completes an unattended-default install on a clean virtual disk; the rebooted
    system reaches `ar0x-welcome` on first login. ⚠️ **P10 CONFIG COMPLETE, RUNTIME
    OPEN:** the full sequence, branding, package groups, first-boot arming and
@@ -844,7 +862,8 @@ Steps that **cannot** be automated, flagged here per the output rules:
    Remaining gates: MANUAL keygen → publish → `config/packages.x86_64` → QEMU
    install → reboot → first login (RISK-048/051/052).
 4. WiFi, Bluetooth, audio (PipeWire), GPU acceleration, and screen capture all pass the
-   Phase 11 checklist on at least one real hardware machine.
+   Phase 11 checklist on at least one real hardware machine. ⚠️ Item **T-34** of
+   `docs/TESTING_CHECKLIST.md` — MANUAL, unchecked (RISK-005/008/009/053).
 5. `fastfetch`, `/etc/os-release`, GRUB, Plymouth, SDDM, and the desktop all show ar0x branding.
 6. `ar0x-update --check` and `ar0x-info` run without root; `ar0x-welcome` links resolve.
    Phase 8 proof: `./tools/configure-tools.sh --self-test` runs all three offline;

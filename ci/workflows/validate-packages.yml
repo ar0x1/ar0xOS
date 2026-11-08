@@ -52,6 +52,7 @@ jobs:
           ./tools/configure-tools.sh --check
           ./tools/setup-repo.sh --check
           ./tools/configure-installer.sh --check
+          ./tools/build-iso.sh --check
 
       - name: Phase 9 offline self-test (mock signed repo)
         run: |
@@ -63,6 +64,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/lib/ar0x_installer.py "$PWD" --self-test
+
+      - name: Phase 11 offline self-test (size gate + checksum round-trip)
+        run: |
+          set -euo pipefail
+          ./tools/build-iso.sh --sync
+          python3 tools/lib/ar0x_iso.py "$PWD" --self-test
+          ./tools/build-iso.sh --self-test
 
       - name: No private-key material in the tree
         run: |

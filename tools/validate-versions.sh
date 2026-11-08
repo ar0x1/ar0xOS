@@ -70,6 +70,9 @@ REQUIRED_KEYS=(
     AR0X_REPO_SIGN_PACKAGES
     AR0X_INSTALLER_BRANDING AR0X_INSTALLER_LIVE_USER AR0X_CALAMARES_ESP_MIB
     AR0X_CALAMARES_MODULE_SEARCH AR0X_INSTALLER_PACKAGE_GROUPS
+    AR0X_ISO_BUILD_MODE AR0X_ISO_SIZE_GATE_GIB AR0X_ISO_QEMU_RAM_MIB
+    AR0X_ISO_QEMU_CPUS AR0X_ISO_QEMU_DISK_GIB AR0X_RELEASE_ARTIFACT_COUNT
+    AR0X_RELEASE_CHECKLIST_ITEMS AR0X_RELEASE_CHECKLIST_GATE
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -743,6 +746,53 @@ ok "Phase 10 policy gates: RISK-003/004/013, ADR-024, 0755 modes, 5 version keys
 # shared module so both validators agree on ONE definition.
 python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_installer.py" "${AR0X_SOURCE_ROOT}" \
     || fail "Phase 10 structural validation failed (tools/lib/ar0x_installer.py)."
+
+# --- Section 7l: Phase 11 ISO build / test / release-artifact gates ---------
+PHASE11_FILES=(
+    config/iso/README.md config/iso/build-options.conf
+    config/iso/size-budget.conf config/iso/run-qemu-bios.sh
+    config/iso/run-qemu-uefi.sh config/iso/run-qemu-install.sh
+    tools/build-iso.sh tools/checksum.sh tools/lib/ar0x_iso.py
+    docs/ISO_BUILD_GUIDE.md docs/TESTING_CHECKLIST.md
+)
+for f in "${PHASE11_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 11 deliverable: ${f}"
+done
+ok "Phase 11 deliverable files present (${#PHASE11_FILES[@]} files)"
+
+[[ "${AR0X_ISO_BUILD_MODE}" == "iso" ]] \
+    || fail "Phase 11: AR0X_ISO_BUILD_MODE must be 'iso'."
+[[ "${AR0X_ISO_SIZE_GATE_GIB}" == "2.2" ]] \
+    || fail "RISK-012: ISO size gate must be 2.2 GiB."
+[[ "${AR0X_RELEASE_CHECKLIST_ITEMS}" == "40" && "${AR0X_RELEASE_CHECKLIST_GATE}" == "100" ]] \
+    || fail "Phase 11: TESTING_CHECKLIST.md gate must be 40 items / 100%."
+[[ "${AR0X_RELEASE_ARTIFACT_COUNT}" == "6" ]] \
+    || fail "Phase 11: §11 release artifact set must have 6 members."
+grep -Fq 'AR0X_ISO_SIZE_GATE_BYTES="2362232012"' \
+        "${AR0X_SOURCE_ROOT}/config/iso/build-options.conf" \
+    || fail "RISK-012: build-options.conf lost the 2362232012-byte size gate."
+[[ -x "${AR0X_SOURCE_ROOT}/tools/build-iso.sh" && -x "${AR0X_SOURCE_ROOT}/tools/checksum.sh" ]] \
+    || fail "Phase 11: build-iso.sh + checksum.sh must be 0755."
+for l in "${AR0X_SOURCE_ROOT}/config/iso/"run-qemu-*.sh; do
+    [[ -x "$l" ]] || fail "Phase 11: QEMU launcher not 0755: ${l}"
+done
+# RISK-004: the installer VM must never auto-select a device.
+grep -Fq 'AR0X_CONFIRM_DISPOSABLE_VM' \
+        "${AR0X_SOURCE_ROOT}/config/iso/run-qemu-install.sh" \
+    || fail "RISK-004: disposable-VM confirmation gate missing."
+grep -Fq 'lsblk -o NAME,SIZE,MODEL,TRAN' \
+        "${AR0X_SOURCE_ROOT}/docs/TESTING_CHECKLIST.md" \
+    || fail "RISK-004: TESTING_CHECKLIST.md lost the lsblk device check."
+# RISK-051: derived artifacts stay OUT of Git.
+grep -Fq 'SHA256SUMS' "${AR0X_SOURCE_ROOT}/.gitignore" \
+    || fail "RISK-051: SHA256SUMS is not gitignored."
+ok "Phase 11 policy gates: 2.2 GiB size gate, 40/100 checklist, 0755 modes, RISK-004/012/051"
+
+# Delegate the FULL Phase 11 structural check (8 budget rows, archiso 92
+# profile, package policy, 3 QEMU launchers, checksum contract, 40 items) to
+# the shared module so both validators agree on ONE definition.
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_iso.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Phase 11 structural validation failed (tools/lib/ar0x_iso.py)."
 
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then

@@ -341,6 +341,12 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 | A stale `sha256sums` array after editing a tool | `makepkg` aborts with a checksum failure | `configure-tools.sh --sync` regenerates all 18 real SHA-256 sums; `--check` verifies each |
 | Module-level `import gi` in `ar0x-welcome.py` | `--self-test` fails on headless CI with no GTK4 (RISK-047) | `ar0x_pkgbuild.validate_sources()` asserts `gi` is lazy; `run_gui()` imports it |
 | Calamares built before Qt/KPMcore present | Link/compile failure | `R4 → I1` plus Phase 2 host package check |
+| ISO built before the signed `[ar0x]` db exists | `pacman` cannot resolve `ar0x-meta`/`calamares`; unusable ISO (RISK-048) | `build-iso.sh --build` dies on `PENDING-KEYGEN` + a missing `ar0x.db.tar.zst` (ADR-027) |
+| `SHA256SUMS` committed to Git | stale sums after every rebuild; key material leak (RISK-051) | `.gitignore` + `ar0x_iso.check_checksum()` + `checksum.sh --check` assert derived artifacts stay in `out/` |
+| QEMU UEFI launcher writes to the packaged `OVMF_VARS_4m.fd` | firmware vars corrupted for every later boot | launcher `mktemp` + `cp --` a DISPOSABLE writable copy; asserted by `ar0x_iso.check_qemu()` |
+| Installer VM attached to a host device | ⚠️ RISK-004 irreversible data loss | disposable qcow2 only + `AR0X_CONFIRM_DISPOSABLE_VM=yes` + TYPED `AR0X_TARGET_DISK` |
+| `md5`/`sha1` release checksums | collision attacks; §11 contract violated | `check_checksum()` rejects weak hashes; `build-options.conf` pins `sha256` |
+| Test checklist shorter than 40 items | release gate silently weakened | `ar0x_iso.check_docs()` asserts exactly `T-01..T-40` unchecked; negative-tested |
 | A flat Calamares module list (no `show`/`exec` phases) | 3.4.3 cannot enqueue view/job modules; install never starts | `settings.conf` 3 phases asserted by `ar0x_installer.py::check_settings()` (ADR-026) |
 | `bootloader` before `unpackfs` | GRUB writes into a rootfs that does not exist yet | `EXEC_ORDER` asserts `unpackfs → … → grubcfg → bootloader` |
 | `pacman -Sy` inside the offline installer | partial DB sync / partial upgrade, §9 contract violated | `packages.conf` `update_db/system: false`; `ar0x_installer.py` fails on `-Syu`/`--noconfirm`/`pacman -Sy` |
@@ -355,7 +361,7 @@ root privileges — they are the work that can be done in this sandbox ahead of 
 ```
 GATE-1 (you confirm P1) ──> P2 ──> GATE-2 ──> P3 ──> GATE-3 ──> P4 ──> GATE-4
    ──> P5 ──> GATE-5 ──> P6 ──> GATE-6 ──> P7 ✅ ──> GATE-7 ──> P8 ✅ ──> GATE-8
-   ──> P9 ✅ ──> GATE-9 ──> P10 ✅ ──> GATE-10 ──> P11 ──> GATE-11 ──> P12 ──> RELEASE
+   ──> P9 ✅ ──> GATE-9 ──> P10 ✅ ──> GATE-10 ──> P11 ✅ ──> GATE-11 ──> P12 ──> RELEASE
 ```
 
 Every gate is an explicit user confirmation. No gate is auto-advanced.

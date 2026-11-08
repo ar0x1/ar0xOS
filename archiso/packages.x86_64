@@ -1,4 +1,5 @@
 # /home/user/ar0xOS/config/packages.x86_64
+# ar0x packages are intentionally absent until the signed [ar0x] repo exists.
 # -----------------------------------------------------------------------------
 # PHASE 3 — canonical ar0x package list for the archiso 92 `iso` buildmode.
 # One package (or package group) per line. Lines starting with # and blank

@@ -814,6 +814,45 @@ asserts the Codeberg 3.4.3 pin and rejects the archived GitHub mirror.
 `calamares` remains absent from `config/packages.x86_64`. **Reversal cost:**
 LOW (one `settings.conf` + validator pass).
 
+## ADR-027 — Size-gate-first ISO build & sha256-only release artifacts (Phase 11)
+
+**Status:** ACCEPTED · 2026-11-08 · completes `PROJECT_PLAN.md §7/§11/§15` row 11.
+
+**Context.** The v0.1 release gate requires a **≤ 2.2 GB** ISO, a `SHA256SUMS`
+file plus detached GPG signatures, and a **100%** pass of a test checklist.
+Neither `mkarchiso`, QEMU, `edk2-ovmf`, `gpg`, KVM, loop devices nor root is
+available in this sandbox, and the offline release key is `PENDING-KEYGEN` with
+no signed `[ar0x]` db. Building an ISO here would be a false claim; publishing
+an unsigned artifact would be a security incident (RISK-051).
+
+**Decision.**
+
+| Contract | Implementation |
+|---|---|
+| Size gate | `AR0X_ISO_SIZE_GATE_BYTES=2362232012` in `config/iso/build-options.conf`, parity with `AR0X_ISO_MAX_BYTES`; `stat -c %s` in `build-iso.sh --build`; 8 §7 rows in `size-budget.conf` (1890 MiB / 362 MiB headroom) |
+| Build refusal | `--build` requires `AR0X_CONFIRM_BUILD=yes`, root, `mkarchiso`, a published 40-hex FPR **and** the signed `ar0x.db.tar.zst`; otherwise it dies (RISK-048/051) |
+| Reproducibility | `SOURCE_DATE_EPOCH` derived from the frozen `2026/11/01` snapshot; `mkarchiso -v -m iso` on the staged archiso 92 profile |
+| Integrity | `checksum.sh`: **sha256 only**, `sha256sum -c`, `gpg --verify SHA256SUMS.sig SHA256SUMS`, detached `.sig` for the ISO too; `--sign` REFUSES on `PENDING-KEYGEN` |
+| Derived artifacts | `*.iso`, `SHA256SUMS*`, `*.sig`, `packages.lock`, `*.gpg` are gitignored and live in `/opt/ar0x-build/out/`, never in the checkout |
+| VM testing | 3 canonical `0755` launchers: SeaBIOS (no pflash), OVMF (2 pflash + **disposable** writable vars copy), and an installer VM with a **disposable qcow2** + typed `AR0X_TARGET_DISK` (RISK-004) |
+| Exit gate | `docs/TESTING_CHECKLIST.md`: exactly 40 ordered `- [ ] T-NN` items, **100%** required before `v0.1.0` |
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Refuse-until-signed + gate tooling ✅** | no unverifiable release, no host-disk risk, gates are really testable offline | the ISO cannot be produced here; all 40 checklist items stay MANUAL |
+| Build an unsigned "preview" ISO now | demonstrable artifact | violates §11/RISK-051; would be unusable without `ar0x-meta` |
+| Auto-select the VM target disk | one less click | ⚠️ RISK-004 — irreversible data loss; explicitly rejected |
+| `md5`/`sha1` checksums | faster | cryptographically broken; rejected by `ar0x_iso.check_checksum()` |
+
+**Enforcement.** `tools/lib/ar0x_iso.py` (pure stdlib, 9 negative mutation
+tests + a REAL sparse-file size-gate exercise), `tools/validate-versions.sh §7l`,
+`tools/build-iso.sh --check/--self-test`, `tools/checksum.sh --self-test`, and
+the PR-safe `ci/workflows/validate-packages.yml`.
+
+**Tradeoffs accepted:** the release is source-complete but artifact-incomplete;
+RISK-053 records that no ISO was built/booted/hashed/signed. **Reversal cost:**
+LOW (tools only; no artifact is committed).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -844,3 +883,4 @@ LOW (one `settings.conf` + validator pass).
 | 024 ONE OWNER PER PATH + PR-safe signed repo | all 8 PKGBUILDs, zero pacman conflicts, private key never on a PR workflow | duplicate reference data on disk; generation/signing/publication remain MANUAL |
 | 025 ar0x-only naming (`ar0x root` / `ar0x-root`) | one self-referential brand, enforced by a whole-tree build gate | 72 files + 3 binary renames, repetitive `ar0x 0.1.0 (ar0x root)` wording |
 | 026 Real Calamares `show/exec/show` + offline groups + symlink first boot | an actually runnable 3.4.3 installer, zero `pacman -Sy`, ADR-024 one owner | 22 exec jobs, first-boot unit dangling until P11, no live GUI QA (RISK-052) |
+| 027 Size-gate-first ISO build + sha256-only signatures + disposable VMs | no unverifiable release, gate really testable offline, zero host-disk risk | no ISO here; 0/40 checklist until MANUAL Phase 11 QA (RISK-053) |
