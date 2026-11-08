@@ -47,7 +47,11 @@ published **out of band** on this page and verified below.
 All 12 phases are source-complete, but **no ISO exists here**: this sandbox has
 no root, no `mkarchiso`/`pacman`/`gpg`, and no access to Arch package mirrors.
 `tools/build-release.sh` therefore **fails closed** rather than fabricating a
-non-bootable file. On a real Arch host (or the privileged Arch build container
+non-bootable file. ⚠️ **Host gate first:** you need Arch Linux (or a privileged
+Arch container), **8 GiB RAM** and **40 GiB free** at the build root. A
+non-Arch host, a Live USB, or `./tools/setup-build-env.sh --check` passing with
+warnings does **not** qualify — see [`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md)
+§0. On a real Arch host (or the privileged Arch build container
 in `docker/Dockerfile`), the whole automatable chain is one command:
 
 ```bash

@@ -106,7 +106,12 @@ def check_docs(root):
     assert "-----BEGIN" not in w and "SigLevel = Never" not in w, \
         "RISK-051: no private key / weak SigLevel in the ISO workflow"
     assert "\t" not in w, "build-iso.yml contains a TAB (YAML forbids tabs)"
-    ok("docs + CI: real-host recipes, fork guard, MANUAL publication, no fake ISO claims")
+    live = root / ".github/workflows/build-iso.yml"
+    assert live.is_file(), \
+        "GitHub Actions reads ONLY .github/workflows/: live build-iso.yml is missing"
+    assert live.read_bytes() == (root / "ci/workflows/build-iso.yml").read_bytes(), \
+        "live workflow drifted from ci/workflows/build-iso.yml (copy it again)"
+    ok("docs + CI: real-host recipes, fork guard, MANUAL publication, live .github/workflows mirror")
 
 
 def check_policy(root):
@@ -139,6 +144,7 @@ def run_checks(root):
 NEEDED = (
     "tools/build-release.sh", "tools/bootstrap.sh", "tools/build-iso.sh",
     "docs/BUILD_RELEASE_ISO.md", "README.md", "ci/workflows/build-iso.yml",
+    ".github/workflows/build-iso.yml",
     "config/packages.x86_64", "archiso/packages.x86_64", "tools/checksum.sh",
 )
 
@@ -214,6 +220,9 @@ def self_test(root):
     _expect_fail("checksum.sh lost the offline GNUPGHOME keyring", root,
                  _edit("tools/checksum.sh", "GNUPGHOME", "HOME"),
                  "offline keyring")
+    _expect_fail("live .github/workflows mirror drifted from the canonical workflow", root,
+                 _edit(".github/workflows/build-iso.yml", "workflow_dispatch", "push"),
+                 "live workflow drifted")
 
     print("[ OK ] post-plan ISO build chain offline self-test PASSED")
     return 0

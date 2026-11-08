@@ -1,4 +1,4 @@
-# /home/user/ar0xOS/ci/workflows/build-iso.yml
+# ar0x REAL ISO build workflow — canonical ci/workflows/, live .github/workflows/
 # -----------------------------------------------------------------------------
 # Post-plan — REAL ar0x ISO build on GitHub's infrastructure.
 #
@@ -29,6 +29,10 @@ on:
         description: 'Validate hosts + tooling without building or signing'
         type: boolean
         default: false
+      runner:
+        description: 'Runner label. Standard ubuntu-latest has only ~14 GB SSD; use a self-hosted or larger runner with >=40 GiB free.'
+        type: string
+        default: ubuntu-latest
 
 permissions:
   contents: read
@@ -37,7 +41,7 @@ jobs:
   build-iso:
     # Fork guard: the offline key must never be exposed to forked PR code.
     if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'ar0x1/ar0xOS' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 240
     env:
       AR0X_BUILD_ROOT: /opt/ar0x-build
@@ -52,6 +56,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Report runner capacity (ISO build needs >= 40 GiB free)
+        run: |
+          set -euo pipefail
+          df -h / /opt 2>/dev/null || true
+          free -h || true
+          avail="$(df -Pk / | awk 'NR==2 {printf "%d", $4 * 1024}')"
+          need=$((40 * 1024 * 1024 * 1024))
+          if (( avail < need )); then
+            echo "::warning::Less than 40 GiB free on this runner."
+            echo "::warning::Standard ubuntu-latest ships ~14 GB SSD; set the 'runner'"
+            echo "::warning::dispatch input to a self-hosted or larger runner, or mkarchiso"
+            echo "::warning::will fail with ENOSPC."
+          fi
 
       - name: Validate the release-key contract (never print the key)
         run: |

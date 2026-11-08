@@ -29,6 +29,52 @@ fabricating one. This is deliberate (ADR-027/028).
 
 ---
 
+## 0. Can this machine build the ISO? (READ THIS FIRST)
+
+`setup-build-env.sh --check` is **read-only** and deliberately downgrades
+hardware shortfalls to warnings — it also runs on lint/CI machines. A green
+`--check` does **not** mean the host can build. `--yes` (full mode) refuses a
+non-Arch host by design, because this toolchain installs with `pacman`:
+
+| Requirement | Minimum | If missing |
+|---|---|---|
+| OS | **Arch Linux** or a privileged `archlinux:base-devel` container | `Host is not Arch-based`; `pacman`/`makepkg`/`mkarchiso` do not exist. Zorin/Ubuntu/Mint/Debian **cannot** run `setup-build-env.sh --yes` |
+| RAM | **8 GiB** (16 recommended) | `Only 5.7 GiB RAM` → hard failure in full mode |
+| Free disk at `/opt` | **40 GiB** (64 recommended) | `Not enough free space at /opt: 2.1 GiB` → `mkarchiso` fails with `ENOSPC` |
+| Root | `sudo` | `mkarchiso` needs mount/mknod/chroot/loop |
+| Not a Live USB | a real installed filesystem | an overlayfs on `filesystem.squashfs` + `/cow` is RAM-backed and only a few GiB |
+
+Example of an **ineligible** host (Zorin 18 Live USB, 5.7 GiB RAM, 2.1 GiB free):
+
+```
+[FAIL] Host is not Arch-based (ID=zorin). mkarchiso requires an Arch host or an Arch container.
+[FAIL] Only 5.7 GiB RAM; 8 GiB minimum (16 GiB recommended).
+[FAIL] Not enough free space at /opt: 2.1 GiB < required 40.0 GiB.
+[FAIL] Required command not found: makepkg (run tools/setup-build-env.sh).
+[FAIL] Required command not found: mkarchiso (run tools/setup-build-env.sh).
+```
+
+The scripts are **working correctly**: they fail closed instead of producing a
+broken ISO. No sequence of commands will make this machine build it. Pick ONE:
+
+1. **Install Arch Linux** on real hardware with >= 8 GiB RAM and >= 40 GiB free
+   (or move the build root: `sudo ./tools/setup-build-env.sh --yes --build-root /mnt/big/ar0x`).
+2. **Use a bigger machine + Docker**: `docker compose -f docker/compose.yaml build`,
+   then run `setup-build-env.sh --yes --allow-non-arch` **inside** the Arch
+   container. Needs >= 40 GiB free on the Docker host and `--privileged`.
+3. **Rent a cloud VPS** (4 vCPU / 16 GiB / 80 GiB), install Arch or Docker there.
+4. **GitHub Actions** — see §3D. The workflow is now mirrored into
+   `.github/workflows/build-iso.yml` so it is actually dispatchable. Standard
+   `ubuntu-latest` has **~14 GB SSD**, below this build's requirement — dispatch
+   with the `runner` input set to a self-hosted or larger runner with >= 40 GiB
+   free, or the build will run out of space.
+
+⚠️ A GitHub-hosted runner receives the offline private key as a repository
+secret. That is **not** air-gapped (RISK-051). For a real public release,
+generate the master key on an air-gapped machine and build there instead.
+
+---
+
 ## 0.5 Get the SOURCE first (PR #1 is MERGED — plain clone is enough)
 
 There is **no ISO to download anywhere**. What you download is the ~3.8 MB
@@ -170,11 +216,14 @@ sudo AR0X_CONFIRM_RELEASE_CHAIN=yes AR0X_CONFIRM_SIGNED_REPO=yes \
 
 ### D. GitHub Actions (already on `main` — PR #1 MERGED)
 
-`ci/workflows/build-iso.yml` is `workflow_dispatch`-only and is already on
-`main`, so it can be dispatched now; it needs repository secrets for the
-offline key. It runs the same privileged Arch container and
+The **dispatchable** copy is `.github/workflows/build-iso.yml` (GitHub Actions
+reads only that directory); `ci/workflows/build-iso.yml` is its validated
+canonical mirror and the two are byte-identical. Once that file is on `main`,
+**Actions → "Build ar0x ISO" → Run workflow** appears. It needs the 3 repository
+secrets for the offline key, runs the same privileged Arch container, and
 uploads the 6 artifacts as a workflow artifact — **never** a GitHub Release.
-See `ci/workflows/README.md`.
+Set the `runner` input to a self-hosted/larger runner with >= 40 GiB free;
+standard `ubuntu-latest` has only ~14 GB SSD. See `ci/workflows/README.md`.
 
 ---
 
