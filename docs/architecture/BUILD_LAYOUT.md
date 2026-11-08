@@ -144,6 +144,8 @@ so `build/out/ar0x-0.1.0-x86_64.iso` is a convenient relative path from the chec
 │   │   ├── build-options.conf                 # 16 pins: 2.2 GiB gate, OVMF, hashes
 │   │   ├── size-budget.conf                   # 8 §7 rows (1890 MiB compressed)
 │   │   └── run-qemu-{bios,uefi,install}.sh   # 0755 VM launchers (RISK-004)
+│   ├── release/                               # Phase 12 ✅ CANONICAL
+│   │   └── release-options.conf               # 21 pins: v0.1.0, exact 6 artifacts
 │   └── repo/
 │       ├── pacman.conf.ar0x-entry               # Phase 9 — snippet appended to installed conf
 │       └── repo-options.conf                    # Phase 9 — repo-add options
@@ -327,6 +329,8 @@ logic other than the three explicit renames below:
 | `config/installer/ar0x-installer-finish` | `/usr/lib/ar0x/ar0x-installer-finish` (`0755`) |
 | `config/installer/ar0x-installer.desktop` | `/usr/share/applications/ar0x-installer.desktop` (`0644`) |
 | `config/iso/**` | NO target path — build-time inputs only; `--sync` stages a disposable `build/iso-prefix/` (gitignored) |
+| `config/release/**` | NO target path — release-engineering inputs only; `--sync` stages a disposable `build/release-prefix/` (gitignored) |
+| `README.md`, `CHANGELOG.md`, `docs/{RELEASE_GUIDE,ANNOUNCEMENT,DISTROWATCH,ROADMAP}.md` | 2 of these (`README.md`, `CHANGELOG.md`) are 2 of the 6 published artifacts; staged into `out/` at release time, NEVER derived in Git |
 | `tools/build-iso.sh` → `mkarchiso` | `/opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso` (gitignored, `2362232012`-byte gate) |
 | `tools/checksum.sh --create/--sign` | `/opt/ar0x-build/out/{SHA256SUMS,SHA256SUMS.sig,<iso>.sig}` (gitignored) |
 | `assets/plymouth/ar0x/**` | `/usr/share/plymouth/themes/ar0x/**` |

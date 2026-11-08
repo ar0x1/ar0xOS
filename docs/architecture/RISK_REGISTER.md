@@ -66,6 +66,7 @@
 | **RISK-048** | ⚠️ **HIGH** | **STILL OPEN after Phase 9**: the signed `[ar0x]` database was NOT built/published, so all 8 packages remain SOURCE + PKGBUILD only and `ar0x-meta` is not installable. `config/packages.x86_64` carries ZERO `ar0x-*` packages | Phase 9 shipped the complete tooling: `setup-repo.sh`, `ar0x_repo.py`, 3 CI workflows, `config/repo/**`, all 8 PKGBUILDs (57/57 sums), ADR-024. **MANUAL gates**: air-gapped `--keygen` → `--sync` → `--build` → `--sign` → `--verify` → Phase 12 `--publish`/DNS/TLS. `ar0x_pkgbuild.validate_iso_package_policy()` still FAILS if any `ar0x-*` appears in the ISO list before Phase 11; acceptance criterion 7 remains explicitly blocked | P8/P9 → P11/P12 |
 | **RISK-049** | **MEDIUM** | `makepkg`, `gpg`, `repo-add`, `pacman`, `namcap`, `desktop-file-validate`, `systemd-analyze verify` and `shellcheck` are unavailable here — **all 8** PKGBUILDs were NEVER built, only structurally validated | 8/8 PKGBUILDs pass `bash -n`; `ar0x_pkgbuild.py` verifies 57/57 sums (56 real + 1 MANUAL `SKIP`), `ADR-024: 0/8 overlay paths`, 3 `.desktop` files + 2 units; `setup-repo.sh --sync` refreshes all sums; `ar0x_repo.py --self-test` exercises a mock signed repo + 3 negative cases. **MANUAL gate**: `AR0X_CONFIRM_BUILD=yes ./tools/setup-repo.sh --build` as a NON-ROOT `builder` on `archlinux:base-devel`, then `namcap` + `shellcheck` | P8/P9 |
 | **RISK-050** | **LOW** | The five `AR0X_URL_*` link endpoints AND `https://repo.ar0x.dev/$arch` are RESERVED; `/tree/main/docs` resolves only AFTER the PR is merged | `links.conf` keeps URL pins in ONE place with `AR0X_URL_*` parity asserted by `--check`; `repo-options.conf` / `pacman.conf.ar0x-entry` / `pacman.conf.installed` all use the same https `$arch` placeholder, asserted by `ar0x_repo.validate_repo_options()`. **MANUAL Phase 12 gate**: `curl -IL` every endpoint, provision DNS + TLS, replace any dead one before tagging v0.1.0 | P8/P9/P12 |
+| **RISK-054** | ⚠️ **HIGH** | **NOTHING was released.** No git tag `v0.1.0`, no GitHub Release, no `rsync`/SourceForge/OSDN upload, no announcement, no DistroWatch email. `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`, no signed ISO, `docs/TESTING_CHECKLIST.md` is 0/40 | Anyone publishes a DRAFT document, calls `--publish` "released", or fills in an invented SHA256/FPR/ISO URL (RISK-051/053) | `README.md` says `SOURCE-COMPLETE, RELEASE-PENDING` + `NO downloadable ISO`; `CHANGELOG.md` is `UNRELEASED`; `docs/ANNOUNCEMENT.md` says `DO NOT PUBLISH`; `docs/DISTROWATCH.md` says `DO NOT SEND`; `docs/ROADMAP.md` says `PLANNING ONLY`; every missing value is a `{{PLACEHOLDER}}`; `ar0x_release.check_docs()` + `validate-versions.sh §7m` assert all banners and reject a `releases/download/v0.1.0` link; `--publish` is PRINT-ONLY, NEVER uploads, and requires `AR0X_CONFIRM_PUBLISH=yes`. **MANUAL**: the 9 gates in `docs/RELEASE_GUIDE.md §2` | You, P12 |
 | **RISK-053** | ⚠️ **HIGH** | **No ISO exists.** `mkarchiso`, `qemu-system-x86_64`, `qemu-img`, `edk2-ovmf`, `xorriso`, `gpg`, KVM, loop devices and root are ALL absent in this sandbox; the ISO was never built, booted, hashed or signed, and the offline release key is `PENDING-KEYGEN` | Anyone claims "ISO built / QEMU booted / signatures verified" from `--check` output alone, or publishes an unsigned artifact (RISK-051) | `tools/build-iso.sh --build` requires `AR0X_CONFIRM_BUILD=yes` + root + `mkarchiso` + a published 40-hex FPR + the signed `ar0x.db.tar.zst`; `tools/checksum.sh --sign` REFUSES on `PENDING-KEYGEN`; derived artifacts are gitignored and never committed; `docs/TESTING_CHECKLIST.md` ships exactly **40 unchecked** `- [ ] T-NN` boxes with a **100%** exit gate, asserted by `ar0x_iso.check_docs()` (negative-tested); `--preflight`/`--qemu-*` are print-only when QEMU is absent. **MANUAL**: real Arch host build, QEMU BIOS+UEFI, disposable-qcow2 install, real-hardware QA, detached signatures | You, P11/P12 |
 | **RISK-052** | ⚠️ **HIGH** | Phase 10 Calamares GUI was **NEVER launched**: no Qt6/QML/KPMcore runtime, no Wayland session, no QEMU/KVM, no root, no real target disk in this sandbox; configuration, branding, first-boot wiring and offline self-tests only | Anyone claims "full install → reboot → first boot succeeds" based on structural validation alone | `docs/INSTALLER_FLOW.md §2/§6/§7` marks the whole flow MANUAL; `config/calamares` is validated by `ar0x_installer.py` (9 negative tests + a REAL `ar0x-installer-finish` run into a temp root, NOT an install); `configure-installer.sh --preflight` is print-only and NEVER launches calamares; `calamares` is deliberately absent from `config/packages.x86_64` until the signed `[ar0x]` repo exists. **MANUAL Phase 11 gate**: QEMU UEFI+BIOS install → reboot → `ar0x-welcome` first login | You, P10/P11 |
 | **RISK-051** | ⚠️ **CRITICAL** | Offline private GPG release key + CI signing secrets: leakage, an unprotected key, or a bad signature published to users is a **security incident** requiring key rotation, revocation and re-signing every package | `RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`; `ar0x-trusted` is EMPTY so `SigLevel = Required` correctly refuses an unsigned repo; `ar0x-public-key.asc` is a MANUAL gitignored keygen artifact with `SKIP` checksum; `--keygen` uses `gpg --quick-generate-key` WITHOUT `--batch`/`--passphrase` so gpg-agent demands a real passphrase, `GNUPGHOME` is `0700` under `/opt/ar0x-build/keys`; `validate-packages.yml` + `build-packages.yml` run on forked PRs with **ZERO secrets**; `release.yml` has NO `pull_request` trigger + an explicit fork guard + a protected `release` Environment; `ar0x_repo.validate_workflows()` and `validate_no_secrets()` assert all of this; `ar0x-revoked` is the revocation path. **MANUAL**: air-gapped keygen, fingerprint publication, key rotation | You, P9/P12 |
@@ -97,7 +98,7 @@ These exact warnings will be repeated at the start of the corresponding phase re
 | 9 | ⚠️ **RISK-051** (CRITICAL: private release key NEVER on a PR workflow), **RISK-048** (no signed repo after P9 tooling), RISK-049 (no `makepkg`/`gpg`/`repo-add`), RISK-003 (Codeberg), RISK-011 (key custody), RISK-050 (reserved `repo.ar0x.dev`) |
 | 10 | ⚠️ **RISK-004** (CRITICAL: destructive partitioning — `lsblk` + TYPED device + disposable VM disk), **RISK-052** (GUI NEVER launched), **RISK-003** (Codeberg 3.4.3 only), **RISK-048/051** (no signed repo → `calamares` not on ISO), RISK-013 (NOPASSWD guard), RISK-033 (empty-password live user), RISK-010 (official-only groups) |
 | 11 | ⚠️ **RISK-053** (NO ISO built/booted/hashed/signed), ⚠️ **RISK-004** (destructive partitioning), **RISK-048/051** (no signed repo / release key), **RISK-052** (GUI never rendered), RISK-005, RISK-007, RISK-009, RISK-012, RISK-015, RISK-003 |
-| 12 | RISK-015 |
+| 12 | ⚠️ **RISK-054** (NOTHING released), ⚠️ **RISK-051** (key custody + FPR out of band), **RISK-048/053** (no signed repo / ISO), RISK-015 (signature mismatch), RISK-050 (reserved endpoints), RISK-011 |
 
 ---
 
@@ -160,6 +161,16 @@ These exact warnings will be repeated at the start of the corresponding phase re
     or a private key (RISK-051); they are gitignored and live in `out/`.
 26. **Never** use `md5`/`sha1` for release artifacts, write directly to the
     packaged `OVMF_VARS_4m.fd`, or mix `uefi.grub` with `uefi.systemd-boot`.
+27. **Never** remove a DRAFT/UNRELEASED banner, fill in an invented
+    SHA256/FPR/ISO URL, or call `--publish` "released" (RISK-054). The driver is
+    PRINT-ONLY and NEVER uploads.
+28. **Never** run `gh release create` without `--verify-tag` and an EXPLICIT
+    list of all 6 artifacts; a glob can silently omit a detached `.sig`
+    (RISK-015). Create and push the annotated signed tag FIRST.
+29. **Never** publish the release fingerprint only in the release notes —
+    publish it OUT OF BAND in `README.md`, a website and a keyserver (RISK-051).
+30. **Never** send the DistroWatch draft without a real direct ISO URL; the
+    submission needs exactly 4 fields and goes on a waiting list.
 
 ---
 
@@ -188,5 +199,9 @@ v0.1 is a **developer preview**. The residual risks accepted at release are:
   or `pacman -S ar0x-meta` has run (RISK-049).
 - `ar0x-update --upgrade` has NO automatic rollback; `--rollback` can only reach
   versions still present in `/var/cache/pacman/pkg/`.
+
+- **Nothing was released (RISK-054).** No `v0.1.0` tag, GitHub Release,
+  mirror upload, announcement or DistroWatch submission exists. Phase 12
+  delivered only the print-only tooling and DRAFT/UNRELEASED templates.
 
 Each of these is a candidate for v0.2 / v1.0 in the Phase 12 roadmap.

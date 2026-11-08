@@ -853,6 +853,47 @@ the PR-safe `ci/workflows/validate-packages.yml`.
 RISK-053 records that no ISO was built/booted/hashed/signed. **Reversal cost:**
 LOW (tools only; no artifact is committed).
 
+## ADR-028 — Print-only release engineering (Phase 12)
+
+**Status:** ACCEPTED · 2026-11-08 · completes `PROJECT_PLAN.md §11/§15` row 12.
+
+**Context.** Phase 12 must produce `README.md`, an announcement, an upload
+guide, a DistroWatch draft and a roadmap. But no ISO exists (RISK-053), the
+offline release key is `PENDING-KEYGEN` with no signed `[ar0x]` db
+(RISK-048/051), `docs/TESTING_CHECKLIST.md` is 0/40, and this sandbox has no
+`gh`, `gpg`, `rsync`, network credentials or external accounts. A real tag or
+upload would be irreversible AND false. `gh release create` without
+`--verify-tag` silently creates a tag from the default branch, and a glob asset
+list can silently omit a detached `.sig`.
+
+**Decision.**
+
+| Contract | Implementation |
+|---|---|
+| Publish driver | `tools/prepare-release.sh --publish` is **PRINT-ONLY** and NEVER uploads; requires `AR0X_CONFIRM_PUBLISH=yes`; prints `--verify-tag`, `--notes-file` and the exact 6 assets |
+| Artifact set | exactly `.iso`, `SHA256SUMS`, `SHA256SUMS.sig`, `<iso>.sig`, `CHANGELOG.md`, `README.md` — asserted by `ar0x_release.check_artifact_set()` (negative-tested) |
+| No false claims | `README.md` carries `SOURCE-COMPLETE, RELEASE-PENDING` + `NO downloadable ISO`; `CHANGELOG.md` is `UNRELEASED`; announcement/DistroWatch/roadmap carry DRAFT banners and `{{PLACEHOLDER}}` fields |
+| Key publication | 40-hex FPR published **OUT OF BAND** in `README.md` (not only in release notes); `PENDING-KEYGEN` until then |
+| DistroWatch | email draft with the 4 required fields (name, website URL, description incl. the Arch base, direct ISO URL); waiting-list + DistroWatch Weekly expectation documented |
+| Derived artifacts | `*.iso`, `SHA256SUMS*`, `*.sig`, `*.gpg`, `packages.lock` stay gitignored in `out/`; `--sync` stages only a disposable `build/release-prefix/` |
+| EOL | next stable + 1 month; key-revocation runbook via `ar0x-revoked` |
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Print-only + DRAFT templates ✅** | no accidental irreversible upload, no fake SHA256/FPR, gates really testable offline | the release cannot happen here; every real publication step is MANUAL |
+| Real `gh release create` in the driver | one command | would create a tag/upload with NO signed ISO — security + honesty incident |
+| Filled-in announcement with invented hashes | looks finished | false claims; RISK-054 |
+| FPR only in release notes | simpler | an attacker controlling the release could substitute both the key and the notes |
+
+**Enforcement.** `tools/lib/ar0x_release.py` (pure stdlib, 9 negative mutation
+tests + a REAL mock artifact-set assembly), `tools/validate-versions.sh §7m`,
+`tools/prepare-release.sh --check/--self-test/--publish`, and the PR-safe CI
+workflow. `RISK-054` records that nothing was tagged, uploaded, announced or
+submitted.
+
+**Tradeoffs accepted:** source-complete but artifact-incomplete release; all
+six publication gates are human. **Reversal cost:** LOW (documents + tools only).
+
 ## Summary of accepted tradeoffs
 
 | ADR | We gained | We gave up |
@@ -884,3 +925,4 @@ LOW (tools only; no artifact is committed).
 | 025 ar0x-only naming (`ar0x root` / `ar0x-root`) | one self-referential brand, enforced by a whole-tree build gate | 72 files + 3 binary renames, repetitive `ar0x 0.1.0 (ar0x root)` wording |
 | 026 Real Calamares `show/exec/show` + offline groups + symlink first boot | an actually runnable 3.4.3 installer, zero `pacman -Sy`, ADR-024 one owner | 22 exec jobs, first-boot unit dangling until P11, no live GUI QA (RISK-052) |
 | 027 Size-gate-first ISO build + sha256-only signatures + disposable VMs | no unverifiable release, gate really testable offline, zero host-disk risk | no ISO here; 0/40 checklist until MANUAL Phase 11 QA (RISK-053) |
+| 028 Print-only release driver + exact 6-artifact set + DRAFT banners | zero false claims, no irreversible accidental upload, FPR out of band | no tag/upload/announcement here (RISK-054); all publication is MANUAL |

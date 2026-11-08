@@ -420,6 +420,13 @@ NEVER built with `makepkg` here (RISK-049) and are NOT on the ISO (RISK-048).
     gate and gitignored `SHA256SUMS`; then delegate the full archiso 92
     profile, 8-row size budget, package policy, 3 launchers, checksum
     contract and 40 ordered items to `tools/lib/ar0x_iso.py`.
+12. (Phase 12) Assert all 6 `AR0X_RELEASE_*` version keys, all 10 Phase 12
+    deliverables, the `v0.1.0` tag / `github-releases` / `ar0x1/ar0xOS` /
+    `repo.ar0x.dev` / EOL pins, the `0755` release driver, the DRAFT and
+    UNRELEASED banners (RISK-054), `PENDING-KEYGEN`, and zero derived
+    ISO/SHA256SUMS/*.sig files in the checkout; then delegate the full
+    21-pin release-options parity, exact 6-member artifact set, 5 URL pins
+    and print-only publish driver to `tools/lib/ar0x_release.py`.
 
 `tools/setup-repo.sh --check` adds `bash -n` on all 8 PKGBUILDs, 2 `.install`
 scriptlets, 8 extensionless bash executables (including the 3 `ar0x-apply-*`

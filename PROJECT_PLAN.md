@@ -1,8 +1,8 @@
 # ar0x — Architecture & Project Plan
 
 > **PHASE 1 DELIVERABLE** — the single source of truth for the ar0x distribution.
-> Document version: `1.11.0` · Date: `2026-11-08` · Repository: `ar0x1/ar0xOS`
-> Branch: `arena/53f7f9f8-ar0xos` · Status: **Phases 1–11 complete; Phase 12 awaiting confirmation**
+> Document version: `1.12.0` · Date: `2026-11-08` · Repository: `ar0x1/ar0xOS`
+> Branch: `arena/53f7f9f8-ar0xos` · Status: **ALL 12 phases source-complete; release gates MANUAL**
 >
 > All versions in this document were verified against upstream releases on 2026-11-03.
 > Verification evidence and URLs: [`docs/architecture/COMPONENT_VERSIONS.md`](docs/architecture/COMPONENT_VERSIONS.md).
@@ -727,6 +727,7 @@ must publish Calamares 3.4.3 from the Codeberg tarball, add it with
 | Secondary | own server via `rsync`, then SourceForge / OSDN (Phase 12) |
 | Listing | DistroWatch submission draft (Phase 12) |
 | EOL | `stable` ISO supported until the next stable + 1 month |
+| Phase 12 status | ✅ Source-complete (ADR-028): README, changelog, 21 release pins, 5 release docs, print-only driver + validator. ⚠️ **NOT RELEASED** — RISK-054; `--publish` NEVER uploads; see `docs/RELEASE_GUIDE.md` |
 
 ---
 
@@ -754,6 +755,7 @@ Full ADRs with rejected alternatives: [`docs/architecture/DECISIONS.md`](docs/ar
 | ADR-025 | ar0x-only naming: codename `ar0x root` / `ar0x-root`, boot art `AR0X ROOT`, default wallpaper `ar0x-grid.png`, whole-tree naming gate | one self-referential brand enforced by `validate-versions.sh §7j` vs. 72 files + 3 binary renames and repetitive `(ar0x root)` wording |
 | ADR-026 | Calamares 3.4.3 `show/exec/show` real sequence, `/etc/calamares` branding, offline `packagechooser` groups, `initcpiocfg/initcpio`, plain-symlink first-boot arming | a real installable sequence + zero `pacman -Sy` + no second config copy vs. a 22-job exec phase, a dangling first-boot unit until Phase 11, and no live GUI QA |
 | ADR-027 | Size-gate-first ISO build: refuse `--build` without a signed repo, sha256-only release artifacts, disposable OVMF vars + qcow2, 40-item 100% checklist | no unverifiable release and zero host-disk risk vs. a build that cannot run in this sandbox and a checklist that stays 0/40 until Phase 11 QA is manual |
+| ADR-028 | Print-only release driver, exact 6-artifact set + `--verify-tag`, DRAFT/UNRELEASED banners, FPR published out of band | zero false claims and no irreversible accidental upload vs. a tag/announcement that cannot be produced here (RISK-054) |
 | ADR-008 | SDDM 0.21.0 | Familiar theming vs. X11 greeter in a Wayland-first stack |
 | ADR-009 | AppArmor complain | Auditability vs. risk of breaking portals/GPU |
 | ADR-010 | ext4 default | Predictability vs. btrfs snapshots |
@@ -787,6 +789,7 @@ Full register with mitigations and trigger conditions:
 | RISK-051 | ⚠️ CRITICAL | Offline private release key + CI signing secrets: leakage or a bad published signature is a security incident. `PENDING-KEYGEN`, empty `ar0x-trusted`, PR workflows with ZERO secrets, protected `release` Environment, fork guard, gitignored key artifacts |
 | RISK-052 | ⚠️ HIGH | Phase 10 installer never rendered/booted: no Qt6/QML/Wayland/QEMU/KVM/root here; config, branding, first-boot wiring and offline self-tests only (P10 → P11) |
 | RISK-053 | ⚠️ HIGH | No ISO built, booted, hashed or signed: `mkarchiso`, QEMU, `edk2-ovmf`, `gpg`, KVM, loop devices and root are absent; `docs/TESTING_CHECKLIST.md` is 0/40 unchecked (P11 → MANUAL) |
+| RISK-054 | ⚠️ HIGH | NO tag, GitHub Release, mirror upload, announcement or DistroWatch submission: `PENDING-KEYGEN`, no signed ISO, 0/40 checklist; release docs are DRAFT/UNRELEASED templates (P12 → MANUAL) |
 
 ---
 
@@ -818,7 +821,11 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | 11 | Walk all 40 items of `docs/TESTING_CHECKLIST.md` to **100%**, incl. real-hardware WiFi/BT/audio/GPU and VBox/VMware | You | Acceptance criteria 1–4; aesthetic + hardware judgment |
 | 11 | Confirm SHA256 + GPG signature of the final ISO from a fresh download | You | Release gate (RISK-051) |
 | 11 | QEMU UEFI + BIOS boots, WiFi/audio/GPU checks on real hardware | You | No KVM/root in this sandbox; see the 4 Phase 11 rows above |
-| 12 | Upload to mirrors, submit DistroWatch form, publish announcement | You | External accounts |
+| 12 | Air-gapped keygen → signed `[ar0x]` db → DNS/TLS for `repo.ar0x.dev` → `config/packages.x86_64` → ISO build → signatures → 40/40 checklist | You | ⚠️ RISK-048/050/051/053/054; the whole §16 runtime chain is MANUAL |
+| 12 | Create an ANNOTATED signed tag `v0.1.0` FIRST, then `gh release create --verify-tag --notes-file ...` with the exact 6 assets | You | RISK-015/054; `--publish` is print-only and NEVER uploads |
+| 12 | `rsync` the 6 artifacts to the mirror; SourceForge / OSDN; `curl -IL` all 5 `AR0X_URL_*` endpoints; fresh-download `gpg --verify` + `sha256sum -c` | You | RISK-050/051; external accounts |
+| 12 | Replace every `{{PLACEHOLDER}}`, remove DRAFT banners, publish the announcement + DistroWatch email (4 required fields), date `CHANGELOG.md` | You | RISK-054; DistroWatch waiting list, no reply expected |
+| 12 | EOL: support until next stable + 1 month; key-rotation/revocation runbook if compromised | You | RISK-051 |
 
 ---
 
@@ -839,7 +846,7 @@ Steps that **cannot** be automated, flagged here per the output rules:
 | **9** | Package Repository ✅ | **All 8** PKGBUILDs (57/57 sums), ADR-024 one-owner-per-path + 3 `ar0x-apply-*` helpers, `ar0x-keyring` trust bootstrap, `config/repo/**` policy (12 options), 14 `versions.env` keys, `tools/setup-repo.sh`, `tools/lib/ar0x_repo.py`, 3 GitHub Actions workflows (PR-safe / build / release), `docs/REPO_GUIDE.md`, ADR-024, RISK-051 | `setup-repo.sh --check/--sync/--self-test`, `ar0x_repo.py` (+ `--self-test`), `ar0x_pkgbuild.py`, `validate-versions.sh`, `bash -n`, Python AST, `git diff --check` pass. ⚠️ keygen/signing/publication/`makepkg` are MANUAL; no signed repo exists |
 | **10** | Installer ✅ | Calamares 3.4.3 `settings.conf` (show/exec/show, 3 instances, 22 exec jobs), **21** module configs, ar0x `branding.desc` + `show.qml` + logo mirror, `ar0x-installer-finish` first-boot arming, `pkexec` launcher, `tools/configure-installer.sh`, `tools/lib/ar0x_installer.py`, `docs/INSTALLER_FLOW.md`, ADR-026, RISK-052 | `configure-installer.sh --check/--sync/--self-test` + `ar0x_installer.py` (9 negative tests + REAL helper run), `validate-versions.sh §7k`, `git diff --check` PASS. ⚠️ Full install → reboot → `ar0x-welcome` is a **MANUAL Phase 11 QEMU gate**; GUI never launched here (RISK-052) |
 | **11** | ISO Build & Testing ✅ | `tools/build-iso.sh` (`--check/--sync/--self-test/--preflight/--size-report/--qemu-*/--build`), `tools/checksum.sh` (`--check/--create/--verify/--sign/--self-test`), `tools/lib/ar0x_iso.py`, `config/iso/**` (16 option pins, 8 budget rows, 3 `0755` QEMU launchers), `docs/ISO_BUILD_GUIDE.md`, **40-item** `docs/TESTING_CHECKLIST.md`, ADR-027, RISK-053 | `build-iso.sh --check/--sync/--self-test`, `ar0x_iso.py` (9 negative tests + REAL sparse 2.2 GiB gate), `checksum.sh --self-test` (REAL create/verify/tamper round-trip), `validate-versions.sh §7l`, `git diff --check` PASS. ⚠️ **NO ISO built/booted/hashed/signed** — checklist is 0/40 and all QEMU/hardware items are MANUAL (RISK-053/048/051) |
-| 12 | Release & Distribution | `README.md`, announcement template, upload guide, DistroWatch draft, roadmap template | Tag `v0.1.0` published with signatures |
+| **12** | Release & Distribution ✅ | Real `README.md` (status, verification, docs index), `CHANGELOG.md` UNRELEASED template, `config/release/release-options.conf` (21 pins), `docs/RELEASE_GUIDE.md`, `docs/ANNOUNCEMENT.md`, `docs/DISTROWATCH.md`, `docs/ROADMAP.md`, `tools/prepare-release.sh` (print-only `--publish`), `tools/lib/ar0x_release.py`, ADR-028, RISK-054 | `prepare-release.sh --check/--sync/--self-test`, `ar0x_release.py` (9 negative tests + REAL artifact-set assembly), `validate-versions.sh §7m`, `git diff --check` PASS. ⚠️ **NO tag/upload/announcement/submission** — `PENDING-KEYGEN`, no ISO, checklist 0/40; exit gate `v0.1.0 published with signatures` remains MANUAL (RISK-048/051/053/054) |
 
 ---
 
@@ -852,7 +859,9 @@ Steps that **cannot** be automated, flagged here per the output rules:
 2. ISO size ≤ 2.2 GB; `SHA256SUMS` and detached GPG signature verify. ⚠️ The
    `2362232012`-byte gate is implemented and really tested with sparse files
    (`ar0x_iso.py --self-test`), `checksum.sh` does a real create/verify/tamper
-   round-trip, but **no real ISO was hashed or signed** (`PENDING-KEYGEN`, RISK-051).
+   round-trip, but **no real ISO was hashed or signed** (`PENDING-KEYGEN`,
+   RISK-051); `docs/RELEASE_GUIDE.md §2` lists the MANUAL publication gates
+   (RISK-054).
 3. Calamares completes an unattended-default install on a clean virtual disk; the rebooted
    system reaches `ar0x-welcome` on first login. ⚠️ **P10 CONFIG COMPLETE, RUNTIME
    OPEN:** the full sequence, branding, package groups, first-boot arming and
@@ -886,6 +895,13 @@ Steps that **cannot** be automated, flagged here per the output rules:
    Python programs, not shell scripts. The extensionless Phase 8 executables
    (`ar0x-info`, `ar0x-update`, `ar0x-firstboot`, `ar0x-apparmor-ctl`) are
    `bash -n` checked by `tools/configure-tools.sh --check`.
+9. **§15 row 12 exit gate:** tag `v0.1.0` published with all 6 artifacts and
+   detached signatures. ⚠️ **NOT MET — MANUAL (RISK-054):** Phase 12 delivered
+   `README.md`, `CHANGELOG.md` (UNRELEASED), 21 release pins, the upload guide,
+   the announcement / DistroWatch / roadmap DRAFTS and a print-only release
+   driver, all offline-validated. But NO tag, GitHub Release, mirror upload,
+   announcement or submission exists; `PENDING-KEYGEN`, no ISO, checklist 0/40.
+   `--publish` NEVER uploads. See `docs/RELEASE_GUIDE.md` (ADR-028).
 
 ---
 

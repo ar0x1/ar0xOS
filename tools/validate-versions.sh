@@ -73,6 +73,8 @@ REQUIRED_KEYS=(
     AR0X_ISO_BUILD_MODE AR0X_ISO_SIZE_GATE_GIB AR0X_ISO_QEMU_RAM_MIB
     AR0X_ISO_QEMU_CPUS AR0X_ISO_QEMU_DISK_GIB AR0X_RELEASE_ARTIFACT_COUNT
     AR0X_RELEASE_CHECKLIST_ITEMS AR0X_RELEASE_CHECKLIST_GATE
+    AR0X_RELEASE_TAG AR0X_RELEASE_PRIMARY_HOST AR0X_RELEASE_REPO_SLUG
+    AR0X_RELEASE_SECONDARY_HOST AR0X_RELEASE_EOL_POLICY AR0X_RELEASE_DOC_COUNT
 )
 for key in "${REQUIRED_KEYS[@]}"; do
     if [[ -z "${!key:-}" ]]; then
@@ -793,6 +795,61 @@ ok "Phase 11 policy gates: 2.2 GiB size gate, 40/100 checklist, 0755 modes, RISK
 # the shared module so both validators agree on ONE definition.
 python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_iso.py" "${AR0X_SOURCE_ROOT}" \
     || fail "Phase 11 structural validation failed (tools/lib/ar0x_iso.py)."
+
+# --- Section 7m: Phase 12 release-engineering policy gates -----------------
+PHASE12_FILES=(
+    config/release/README.md config/release/release-options.conf
+    README.md CHANGELOG.md
+    docs/RELEASE_GUIDE.md docs/ANNOUNCEMENT.md docs/DISTROWATCH.md
+    docs/ROADMAP.md
+    tools/prepare-release.sh tools/lib/ar0x_release.py
+)
+for f in "${PHASE12_FILES[@]}"; do
+    [[ -f "${AR0X_SOURCE_ROOT}/${f}" ]] || fail "Missing Phase 12 deliverable: ${f}"
+done
+ok "Phase 12 deliverable files present (${#PHASE12_FILES[@]} files)"
+
+[[ "${AR0X_RELEASE_TAG}" == "v${AR0X_VERSION}" ]] \
+    || fail "Phase 12: AR0X_RELEASE_TAG must be v + AR0X_VERSION (v0.1.0)."
+[[ "${AR0X_RELEASE_PRIMARY_HOST}" == "github-releases" ]] \
+    || fail "Phase 12: primary host must be GitHub Releases."
+[[ "${AR0X_RELEASE_REPO_SLUG}" == "ar0x1/ar0xOS" ]] \
+    || fail "Phase 12: repo slug drifted."
+[[ "${AR0X_RELEASE_SECONDARY_HOST}" == "repo.ar0x.dev" ]] \
+    || fail "RISK-050: reserved mirror endpoint pin drifted."
+[[ "${AR0X_RELEASE_EOL_POLICY}" == "next-stable-plus-one-month" ]] \
+    || fail "Phase 12: EOL policy drifted from section 11."
+[[ "${AR0X_RELEASE_DOC_COUNT}" == "5" ]] \
+    || fail "Phase 12: release document count drifted (guide + 4 templates)."
+[[ -x "${AR0X_SOURCE_ROOT}/tools/prepare-release.sh" ]] \
+    || fail "Phase 12: tools/prepare-release.sh must be 0755."
+# RISK-054: NO false claims. All three drafts must still carry their banners.
+grep -Fq 'SOURCE-COMPLETE, RELEASE-PENDING' "${AR0X_SOURCE_ROOT}/README.md" \
+    || fail "RISK-054: README.md lost its RELEASE-PENDING status banner."
+grep -Fq 'NO downloadable ISO' "${AR0X_SOURCE_ROOT}/README.md" \
+    || fail "RISK-054: README.md claims a downloadable ISO exists."
+grep -Fq 'UNRELEASED' "${AR0X_SOURCE_ROOT}/CHANGELOG.md" \
+    || fail "RISK-054: CHANGELOG.md lost its UNRELEASED banner."
+grep -Fq 'DO NOT PUBLISH' "${AR0X_SOURCE_ROOT}/docs/ANNOUNCEMENT.md" \
+    || fail "RISK-054: ANNOUNCEMENT.md lost its DRAFT banner."
+grep -Fq 'DO NOT SEND' "${AR0X_SOURCE_ROOT}/docs/DISTROWATCH.md" \
+    || fail "RISK-054: DISTROWATCH.md lost its DRAFT banner."
+grep -Fq -- '--verify-tag' "${AR0X_SOURCE_ROOT}/docs/RELEASE_GUIDE.md" \
+    || fail "RISK-015: RELEASE_GUIDE.md lost the --verify-tag gate."
+# RISK-051: no derived release artifacts or private key in the checkout.
+for f in SHA256SUMS SHA256SUMS.sig ar0x-0.1.0-x86_64.iso ar0x-0.1.0-x86_64.iso.sig; do
+    [[ ! -e "${AR0X_SOURCE_ROOT}/${f}" ]] \
+        || fail "RISK-051: derived release artifact leaked into Git: ${f}"
+done
+grep -Fq 'PENDING-KEYGEN' "${AR0X_SOURCE_ROOT}/config/repo/RELEASE_KEY_FINGERPRINT" \
+    || fail "Phase 12: release key state drifted (expected PENDING-KEYGEN here)."
+ok "Phase 12 policy gates: v0.1.0 tag, 6 artifacts, DRAFT banners, PENDING-KEYGEN, RISK-054"
+
+# Delegate the FULL Phase 12 structural check (21 release pins, exact 6-member
+# artifact set, 5 URL pins, DRAFT/UNRELEASED gates, print-only publish driver)
+# to the shared module so both validators agree on ONE definition.
+python3 "${AR0X_SOURCE_ROOT}/tools/lib/ar0x_release.py" "${AR0X_SOURCE_ROOT}" \
+    || fail "Phase 12 structural validation failed (tools/lib/ar0x_release.py)."
 
 # --- Final verdict -----------------------------------------------------------
 if [[ "$ERRORS" -gt 0 ]]; then
