@@ -8,8 +8,8 @@
 | `build-iso.yml` | **`workflow_dispatch` only** (post-merge) | same 3 signing secrets | privileged Arch container → signed `[ar0x]` repo → `build-release.sh --run` → **real ISO** + 6 artifacts as a workflow artifact; **NEVER** a GitHub Release |
 
 ⚠️ **Post-plan ISO build:** `build-iso.yml` is `workflow_dispatch`-only and has an
-explicit fork guard. `workflow_dispatch` workflows become triggerable once this
-file is on `main` (merge the PR first). It builds the ISO on GitHub's Ubuntu
+explicit fork guard. PR #1 is MERGED, so this file is already on `main` and the
+workflow can be dispatched now (after configuring the 3 secrets). It builds the ISO on GitHub's Ubuntu
 runner inside the same privileged `archlinux:base-devel` container as
 `docker/Dockerfile` (`mkarchiso` needs `--privileged`, RISK-016). It NEVER tags,
 releases, mirrors or announces — that stays in `docs/RELEASE_GUIDE.md §4`.

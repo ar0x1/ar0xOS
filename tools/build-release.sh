@@ -53,7 +53,7 @@ ar0x — build-release.sh (post-plan ISO completion driver)
     AR0X_CONFIRM_BUILD=yes           AR0X_CONFIRM_SIGN=yes
     root, mkarchiso/pacman/gpg/repo-add/xorriso/mksquashfs/sha256sum,
     a published 40-hex release FPR, the signed [ar0x] db + .sig,
-    and the offline private key in AR0X_KEYS_DIR/gnupg.
+    and the offline private key in AR0X_KEYS_DIR/gnupg (auto-used as GNUPGHOME).
 
   This driver NEVER tags, NEVER uploads and NEVER announces (RISK-054).
   See docs/BUILD_RELEASE_ISO.md for Docker / Vagrant / native Arch recipes.
@@ -117,6 +117,10 @@ do_preflight() {
 
 require_real_build() {
     section "Hard gates before a REAL ISO build"
+    # The offline master key lives in AR0X_KEYS_DIR/gnupg, NOT in root's
+    # ~/.gnupg. Export it BEFORE any gpg call (db verification, secret-key
+    # lookup) and let child scripts (checksum.sh --sign) inherit it.
+    export GNUPGHOME="${GNUPGHOME:-${AR0X_KEYS_DIR}/gnupg}"
     [[ "${AR0X_CONFIRM_RELEASE_CHAIN:-no}" == "yes" ]] \
         || die "Set AR0X_CONFIRM_RELEASE_CHAIN=yes after reading docs/BUILD_RELEASE_ISO.md."
     [[ "${AR0X_CONFIRM_SIGNED_REPO:-no}" == "yes" ]] \

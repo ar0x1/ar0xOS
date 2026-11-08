@@ -27,7 +27,7 @@ DRIVER_NEEDLES = (
     "setup-repo.sh --verify", "build-iso.sh --build",
     "checksum.sh --sign", "checksum.sh --verify", "2362232012",
     "NEVER tags", "NEVER uploads", "validate-versions.sh",
-    "gpg --verify", "gpg --list-secret-keys", "require_root",
+    "gpg --verify", "gpg --list-secret-keys", "require_root", "GNUPGHOME",
     "RISK-053", "RISK-054", "RISK-004", "--self-test", "--preflight",
 )
 # A publication command in the driver would be an accidental release (RISK-054).
@@ -47,7 +47,7 @@ DOC_NEEDLES = (
     "docker compose", "vagrant up", "AR0X_CONFIRM_RELEASE_CHAIN=yes",
     "PENDING-KEYGEN", "RISK-053", "RISK-054", "40/40", "ADR-029",
     "mkarchiso", "build-release.sh --run", "CapEff",
-    "arena/53f7f9f8-ar0xos",
+    "git clone https://github.com/ar0x1/ar0xOS.git", "PR #1 is MERGED",
 )
 CI_NEEDLES = (
     "workflow_dispatch", "build-release.sh --run", "upload-artifact",
@@ -85,6 +85,9 @@ def check_staging(root):
         assert needle in i, "build-iso.sh missing %r" % needle
     assert "--stage" in i and "bootstrap.sh --sync\n    mkdir -p" not in i, \
         "build-iso.sh --build must really stage the mkarchiso profile (ADR-029)"
+    c = read(root / "tools/checksum.sh")
+    assert "GNUPGHOME" in c, \
+        "checksum.sh --sign must point gpg at the offline keyring (AR0X_KEYS_DIR/gnupg)"
     ok("ADR-029: bootstrap.sh --stage + staged-only signed-package injection; --build uses the stage")
 
 
@@ -95,7 +98,7 @@ def check_docs(root):
     r = read(root / "README.md")
     for needle in ("Make the ISO", "build-release.sh --run",
                    "docs/BUILD_RELEASE_ISO.md", "SOURCE-COMPLETE, RELEASE-PENDING",
-                   "arena/53f7f9f8-ar0xos"):
+                   "git clone https://github.com/ar0x1/ar0xOS.git"):
         assert needle in r, "README.md missing %r" % needle
     w = read(root / "ci/workflows/build-iso.yml")
     for needle in CI_NEEDLES:
@@ -136,7 +139,7 @@ def run_checks(root):
 NEEDED = (
     "tools/build-release.sh", "tools/bootstrap.sh", "tools/build-iso.sh",
     "docs/BUILD_RELEASE_ISO.md", "README.md", "ci/workflows/build-iso.yml",
-    "config/packages.x86_64", "archiso/packages.x86_64",
+    "config/packages.x86_64", "archiso/packages.x86_64", "tools/checksum.sh",
 )
 
 
@@ -208,6 +211,9 @@ def self_test(root):
                  _edit("ci/workflows/build-iso.yml",
                        "github.repository == 'ar0x1/ar0xOS'", "true"),
                  "github.repository")
+    _expect_fail("checksum.sh lost the offline GNUPGHOME keyring", root,
+                 _edit("tools/checksum.sh", "GNUPGHOME", "HOME"),
+                 "offline keyring")
 
     print("[ OK ] post-plan ISO build chain offline self-test PASSED")
     return 0
