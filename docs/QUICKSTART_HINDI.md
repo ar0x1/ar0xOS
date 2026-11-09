@@ -56,6 +56,45 @@ hai (RISK-051). Asli public release ke liye key air-gapped machine par banao.
 > warna key hamesha ke liye chali jayegi.
 
 
+
+### 📱 Kya mobile phone se ISO ban sakta hai? (FAQ)
+
+**Seedha jawab: phone par DIRECTLY nahi — phone se REMOTE build karwa sakte ho.**
+
+| Blocker | Kyun |
+|---|---|
+| CPU architecture | ar0x sirf **x86_64** hai (`setup-build-env.sh` gate: `uname -m != x86_64` → FAIL). Phones **aarch64 / ARM64** hote hain. `pacstrap` x86_64 packages lata hai aur `mkarchiso` chroot me x86_64 binaries chalata hai |
+| Asli root | `mkarchiso` ko real root + `mount`/`chroot`/`mknod`/loop devices chahiye. Termux + proot-distro **userspace chroot** hai (ptrace), isme asli root nahi, FUSE / real filesystem mount / USB device access kaam nahi karta |
+| Kernel | `/dev/loop-control`, `CONFIG_OVERLAY_FS`, `CONFIG_SQUASHFS`, `CONFIG_BLK_DEV_LOOP`, `CONFIG_FUSE_FS` — Android kernels me ye aksar disabled hote hain |
+| Toolchain | `pacman`, `makepkg`, `repo-add`, `mkarchiso`, `xorriso`, `mksquashfs`, `archiso 92-1` Arch/x86_64 specific hain; `proot-distro install archlinux` phone par **Arch Linux ARM** deta hai |
+| Resources | 4 CPUs, **8 GiB RAM**, **40 GiB free** build root. Phone ki storage / I/O / thermal throttling iske liye nahi |
+| Signing key | offline **air-gapped** GPG master key chahiye; phone hamesha networked hai (RISK-051) |
+
+Rooted phone + `DISTRO_ARCH=x86_64` + QEMU user-mode se kuch binaries chal sakte
+hain, par proot me real mount/loop na hone se `mkarchiso` phir bhi fail hoga —
+aur ye repo us combination ko support ya validate nahi karta.
+
+**Phone se jo SACH ME kar sakte ho** (build kahin aur hoti hai):
+
+1. **GitHub Actions trigger karo** — mobile browser me GitHub → **Actions →
+   "Build ar0x ISO" → Run workflow**. Ek baar 3 secrets set karo aur `runner`
+   input me >= 40 GiB free wala self-hosted / larger runner do. Phir **Artifacts**
+   se 6 files download karo (ISO ~2.2 GiB → phone me utni khali jagah chahiye).
+2. **SSH** — Termux ya JuiceSSH se kisi **cloud VPS / ghar ke PC** (Arch,
+   16 GiB RAM, 80 GiB disk) par connect karke §2–§4 ke commands wahan chalao.
+3. **Banii hui ISO ko USB me likhna** — **EtchDroid** (Android, USB OTG,
+   **bina root**) Linux ISO ko raw-write karke verify bhi karta hai. ⚠️ Ye ISO
+   *banata* nahi, sirf pehle se bani ISO ko flash karta hai (Windows ISO support
+   nahi). `sha256sum -c SHA256SUMS` Termux me chal sakta hai.
+
+> **Yaani: phone = remote control + download + USB writer.
+> Build machine = Arch PC / VPS / CI runner.**
+
+Sources: `https://github.com/termux/proot-distro` (rootless ptrace chroot,
+kernel-feature limits, QEMU user-mode cross-arch),
+`https://github.com/ltermux/proot-distro1` (no hardware/device mounting),
+`https://github.com/etchdroid/etchdroid` (no-root Linux ISO → USB OTG).
+
 ---
 
 ## 0. Shuruat — "ISO ka code" kahan se aayega? (ISO download NAHI karni)
@@ -157,10 +196,11 @@ nahi**, `/opt/ar0x-build/out/` me jata hai (gitignored, isliye repo clean rahega
 `workflow_dispatch` dispatch ho sakta hai, lekin **dhyan do**: GitHub
 Actions sirf `.github/workflows/` padhta hai. Isliye workflow ka asli copy
 `.github/workflows/build-iso.yml` me hai (`ci/workflows/build-iso.yml` uska
-validated mirror, dono byte-identical). **Pehle use `main` par merge karna hoga**,
-tab Actions me "Build ar0x ISO" dikhega. GitHub runner par privileged Arch
-container me ISO banta hai — standard runner me sirf ~14 GB SSD hoti hai,
-isliye `runner` input me self-hosted/larger runner do:
+validated mirror, dono byte-identical). **PR #3 bhi MERGE ho chuka hai**, isliye
+ab ye workflow `main` par maujood hai — Actions me "Build ar0x ISO" dikhega
+(`git pull --ff-only` kar lena). GitHub runner par privileged Arch container me
+ISO banta hai — standard runner me sirf ~14 GB SSD hoti hai, isliye `runner`
+input me self-hosted/larger runner do:
 
 1. Repo → **Settings → Secrets and variables → Actions** me 3 secrets daalo:
    `AR0X_RELEASE_GPG_KEY` (offline private key ka base64),
