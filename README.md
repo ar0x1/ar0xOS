@@ -1,16 +1,21 @@
 <div align="center">
 
-# `ar0xOS`
+<h1>ar0xOS</h1>
 
-### Arch at the core. ar0x at the surface.
+<p><strong>Arch at the core. ar0x at the surface.</strong></p>
 
 <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=17&duration=2800&pause=900&color=9B8CFF&center=true&vCenter=true&width=620&lines=A+Wayland-first+Linux+experience.;Built+on+Arch.+Shaped+by+ar0x.;A+darker+environment+for+developers." alt="ar0xOS animated tagline" />
+
+<br />
 
 <p>
   <img src="https://img.shields.io/badge/BASE-ARCH_LINUX-1793D1?style=for-the-badge&logo=archlinux&logoColor=white" alt="Arch Linux" />
   <img src="https://img.shields.io/badge/DISPLAY-WAYLAND-FFBC00?style=for-the-badge&logo=wayland&logoColor=111111" alt="Wayland" />
   <img src="https://img.shields.io/badge/WM-HYPRLAND-58E1FF?style=for-the-badge&logo=hyprland&logoColor=111111" alt="Hyprland" />
   <img src="https://img.shields.io/badge/STATUS-RELEASE_PENDING-F0A33A?style=for-the-badge" alt="Release pending" />
+</p>
+
+<p>
   <img src="https://img.shields.io/badge/CODE-MIT-8B7CFF?style=for-the-badge" alt="MIT License for original ar0xOS code" />
   <img src="https://img.shields.io/badge/DOCS%20%26%20ART-CC%20BY--SA%204.0-6B7280?style=for-the-badge" alt="CC BY-SA 4.0 for documentation and artwork" />
 </p>
@@ -31,8 +36,8 @@
 
 ---
 
-> **Release notice** — `ar0xOS 0.1.0` is source-complete, but release-pending. No ISO has been built, booted, signed, or published yet. There is currently **no download**. A release will be announced here only after the build, boot tests, QA, and signing steps are complete.
- 
+> **Release notice:** `ar0xOS 0.1.0` is source-complete, but release-pending. No ISO has been built, booted, signed, or published yet. There is currently **no download**. A release will be announced here only after the build, boot tests, QA, and signing steps are complete.
+
 ## `01 / Overview`
 
 **ar0xOS** is an Arch-based, rolling Linux distribution with a **Wayland-first Hyprland desktop** and a cyberpunk / dark-hacker identity. It brings together a curated developer environment, custom ar0x utilities, and a branded graphical installer.
@@ -114,9 +119,11 @@ Until the fingerprint is published in this repository, do not trust third-party 
 
 ## `07 / License & credits`
 
-Documentation and artwork are licensed under **CC BY-SA 4.0**. Code and bundled components retain their respective upstream licenses; see the relevant project files for details.
+Original **ar0xOS code** is licensed under the **MIT License**. Documentation and artwork are licensed under **CC BY-SA 4.0**. Third-party and bundled components retain their respective upstream licenses; see the relevant project files for details.
 
 Built by **[ar0x](https://github.com/ar0x1)** · [Repository](https://github.com/ar0x1/ar0xOS) · [Issues](https://github.com/ar0x1/ar0xOS/issues)
+
+---
 
 <div align="center">
 
