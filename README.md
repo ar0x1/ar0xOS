@@ -122,4 +122,4 @@ Built by **[ar0x](https://github.com/ar0x1)** · [Repository](https://github.com
 
 `ar0xOS` · `0.1.0` · **Arch, with an ar0x identity.**
 
-</div>\
+</div>
