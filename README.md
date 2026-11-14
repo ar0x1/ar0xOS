@@ -1,134 +1,123 @@
-# ar0x
+<div align="center">
 
-> **ar0x `0.1.0` "ar0x root"** — an Arch-based, Wayland-first developer
-> distribution with a Cyberpunk / Dark-Hacker identity.
-> ⚠️ **SOURCE-COMPLETE, RELEASE-PENDING.** No ISO has been built, booted, signed
-> or published yet. Read the [status](#status) section before looking for a
-> download link.
+# `ar0xOS`
 
-| | |
-|---|---|
-| Base | Arch Linux, rolling, frozen build snapshot `2026/11/01` |
-| Init / kernel | systemd `v262.1`, stock `linux-lts 6.18.59-1` (zero patches) |
-| Desktop | Hyprland `0.57.1` (Lua config), Waybar, SDDM `0.21.0-7` (Qt6 greeter) |
-| Boot | GRUB (UEFI) + isolinux (BIOS); Secure Boot optional/manual |
-| Installer | Calamares `3.4.3` from **Codeberg**, ar0x branding, auto + manual partitioning |
-| Shell / tooling | zsh interactive, bash scripts, developer profile, `ar0x-info` / `ar0x-update` / `ar0x-welcome` |
-| Packages | pacman + signed `[ar0x]` repo, `SigLevel = Required` |
-| Target ISO | `ar0x-0.1.0-x86_64.iso`, ≤ 2.2 GB |
-| License | docs/art: CC-BY-SA-4.0; code follows upstream Arch licenses |
+### Arch at the core. ar0x at the surface.
+
+<img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=600&size=17&duration=2800&pause=900&color=9B8CFF&center=true&vCenter=true&width=620&lines=A+Wayland-first+Linux+experience.;Built+on+Arch.+Shaped+by+ar0x.;A+darker+environment+for+developers." alt="ar0xOS animated tagline" />
+
+<p>
+  <img src="https://img.shields.io/badge/BASE-ARCH_LINUX-1793D1?style=for-the-badge&logo=archlinux&logoColor=white" alt="Arch Linux" />
+  <img src="https://img.shields.io/badge/DISPLAY-WAYLAND-FFBC00?style=for-the-badge&logo=wayland&logoColor=111111" alt="Wayland" />
+  <img src="https://img.shields.io/badge/WM-HYPRLAND-58E1FF?style=for-the-badge&logo=hyprland&logoColor=111111" alt="Hyprland" />
+  <img src="https://img.shields.io/badge/STATUS-RELEASE_PENDING-F0A33A?style=for-the-badge" alt="Release pending" />
+</p>
+
+<p>
+  <a href="https://github.com/ar0x1/ar0xOS"><img src="https://img.shields.io/badge/SOURCE-GitHub-181717?style=flat-square&logo=github" alt="Source" /></a>
+  <a href="https://github.com/ar0x1/ar0xOS/issues"><img src="https://img.shields.io/badge/ISSUES-Report-8B7CFF?style=flat-square&logo=github" alt="Issues" /></a>
+  <a href="https://github.com/ar0x1/ar0xOS/blob/main/PROJECT_PLAN.md"><img src="https://img.shields.io/badge/ROADMAP-View-8B7CFF?style=flat-square" alt="Roadmap" /></a>
+</p>
+
+<p>
+  <img src="https://img.shields.io/github/stars/ar0x1/ar0xOS?style=flat-square&logo=github&label=stars" alt="GitHub stars" />
+  <img src="https://img.shields.io/github/forks/ar0x1/ar0xOS?style=flat-square&logo=github&label=forks" alt="GitHub forks" />
+  <img src="https://img.shields.io/github/last-commit/ar0x1/ar0xOS?style=flat-square&logo=git&label=last%20commit" alt="Last commit" />
+</p>
+
+</div>
 
 ---
 
-## Status
+> **Release notice** — `ar0xOS 0.1.0` is source-complete, but release-pending. No ISO has been built, booted, signed, or published yet. There is currently **no download**. A release will be announced here only after the build, boot tests, QA, and signing steps are complete.
 
-Phases 1–12 of `PROJECT_PLAN.md` are **source-complete**: architecture,
-archiso 92 profile, kernel/boot, system config, desktop, branding, custom
-tools, package repository, Calamares installer, ISO build tooling and release
-engineering all exist and pass their offline validators.
+## `01 / Overview`
 
-⚠️ **There is NO downloadable ISO.** The following are MANUAL gates that never
-ran in the build sandbox (RISK-053/054):
+**ar0xOS** is an Arch-based, rolling Linux distribution with a **Wayland-first Hyprland desktop** and a cyberpunk / dark-hacker identity. It brings together a curated developer environment, custom ar0x utilities, and a branded graphical installer.
 
-- offline GPG release keygen (`RELEASE_KEY_FINGERPRINT = PENDING-KEYGEN`),
-- building and publishing the signed `[ar0x]` package database,
-- publishing the signed `[ar0x]` db (the ISO packages are then injected into the
-  staged profile by `build-release.sh --run`, ADR-029),
-- `mkarchiso` ISO build, QEMU BIOS/UEFI boots, real-hardware QA,
-- all **40** items of `docs/TESTING_CHECKLIST.md` (currently 0/40),
-- detached GPG signatures, GitHub Release `v0.1.0`, mirror uploads,
-- DNS + TLS for the reserved `repo.ar0x.dev` endpoint.
+*Arch power. A focused desktop. An identity of its own.*
 
-Do not trust any third-party "ar0x 0.1.0 ISO" until a release fingerprint is
-published **out of band** on this page and verified below.
+## `02 / The setup`
 
-## Make the ISO
+| Component | Stack |
+|:--|:--|
+| Base | Arch Linux · rolling snapshot `2026-11-01` |
+| Desktop | Hyprland `0.57.1` · Waybar |
+| Display | Wayland |
+| Login | SDDM `0.21.0` · Qt6 greeter |
+| Init | systemd `262.1` |
+| Kernel | Stock `linux-lts 6.18.59-1` · unpatched |
+| Boot | GRUB (UEFI) · isolinux (BIOS) |
+| Installer | Calamares `3.4.3` · branded workflow |
+| Shell | zsh · Bash tooling |
+| Package layer | pacman · signed `[ar0x]` repository (release setup pending) |
 
-All 12 phases are source-complete, but **no ISO exists here**: this sandbox has
-no root, no `mkarchiso`/`pacman`/`gpg`, and no access to Arch package mirrors.
-`tools/build-release.sh` therefore **fails closed** rather than fabricating a
-non-bootable file. ⚠️ **Host gate first:** you need Arch Linux (or a privileged
-Arch container), **8 GiB RAM** and **40 GiB free** at the build root. A
-non-Arch host, a Live USB, or `./tools/setup-build-env.sh --check` passing with
-warnings does **not** qualify — see [`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md)
-§0. On a real Arch host (or the privileged Arch build container
-in `docker/Dockerfile`), the whole automatable chain is one command:
+## `03 / Built in`
 
-```bash
-# Step 0 (human, air-gapped): generate the offline release key and sign the
-# [ar0x] repo — see docs/BUILD_RELEASE_ISO.md §2. Then:
-sudo AR0X_CONFIRM_RELEASE_CHAIN=yes AR0X_CONFIRM_SIGNED_REPO=yes \
-     AR0X_CONFIRM_BUILD=yes AR0X_CONFIRM_SIGN=yes \
-     ./tools/build-release.sh --run
-```
+- **Hyprland desktop** — a Wayland-first workspace with Waybar and a consistent ar0x visual theme.
+- **Custom utilities** — `ar0x-welcome`, `ar0x-update`, and `ar0x-info`.
+- **Graphical installer** — Calamares with automatic and manual partitioning flows.
+- **Release tooling** — ArchISO profile, build checks, checksum generation, and signing workflow.
+- **Package foundation** — a planned signed `[ar0x]` repository with signature verification required.
 
-That stages the real mkarchiso profile, injects `calamares` + `ar0x-keyring` +
-`ar0x-meta` from the signed `[ar0x]` repo into the **staged profile only**
-(ADR-029), builds the ≤2.2 GiB ISO, writes `SHA256SUMS`, signs both artifacts
-and verifies them. It **never tags, uploads or announces**. Full recipes
-(Docker / Vagrant / native Arch / CI), the exact prerequisites and the MANUAL
-40/40 QA that still follows: **[`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md)**.
+## `04 / Build from source`
 
-Read-only helpers that work anywhere:
-`./tools/build-release.sh --plan`, `--preflight`, `--check`, `--self-test`.
-
-## Verifying a release (when one exists)
+Building the ISO requires a real **Arch Linux host** or a privileged Arch build container, at least **8 GB RAM**, and **40 GB free disk space**. The release key and signed package repository setup are manual prerequisites. Follow the full guide before running a release build.
 
 ```bash
-# 1. Import the release key using the 40-hex fingerprint published HERE.
-gpg --recv-keys <RELEASE_FINGERPRINT>       # PENDING-KEYGEN — not published yet
-# 2. Verify the checksum list and its detached signature.
-gpg --verify SHA256SUMS.sig SHA256SUMS
-sha256sum -c SHA256SUMS
-# 3. Verify the ISO's own detached signature.
-gpg --verify ar0x-0.1.0-x86_64.iso.sig ar0x-0.1.0-x86_64.iso
-```
+git clone https://github.com/ar0x1/ar0xOS.git
+cd ar0xOS
 
-Release fingerprint: **`PENDING-KEYGEN`** (placeholder — never accept a release
-whose key is not published here out of band). RISK-051.
-
-## Build it yourself (real Arch host required)
-
-```bash
-git clone https://github.com/ar0x1/ar0xOS.git && cd ar0xOS
-./tools/validate-versions.sh                 # offline gates
+./tools/validate-versions.sh
 ./tools/bootstrap.sh --check
-./tools/build-iso.sh --preflight            # host prerequisites
-# MANUAL: keygen -> build/sign/publish [ar0x] -> add calamares + ar0x-meta
-sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build
-./tools/checksum.sh --create && ./tools/checksum.sh --verify
-./tools/build-iso.sh --qemu-bios out/ar0x-0.1.0-x86_64.iso
-./tools/build-iso.sh --qemu-uefi out/ar0x-0.1.0-x86_64.iso
+./tools/build-iso.sh --preflight
 ```
 
-⚠️ **RISK-004:** before any install, run `lsblk -o NAME,SIZE,MODEL,TRAN` and
-TYPE the target device; use a disposable VM disk only.
+After completing the manual signing and repository steps documented in the build guide:
 
-## Documentation
+```bash
+sudo AR0X_CONFIRM_BUILD=yes ./tools/build-iso.sh --build
+./tools/checksum.sh --create
+./tools/checksum.sh --verify
+```
 
-| Document | Contents |
-|---|---|
-| [`PROJECT_PLAN.md`](PROJECT_PLAN.md) | Contract for all 12 phases |
-| [`docs/BOOTSTRAP_GUIDE.md`](docs/BOOTSTRAP_GUIDE.md) | archiso 92 profile + build host |
-| [`docs/SYSTEM_CONFIG.md`](docs/SYSTEM_CONFIG.md) | systemd, network, security posture |
-| [`docs/DESKTOP_GUIDE.md`](docs/DESKTOP_GUIDE.md) | Hyprland Lua, SDDM, theming |
-| [`docs/BRANDING_GUIDE.md`](docs/BRANDING_GUIDE.md) | ar0x-only naming, palette, art |
-| [`docs/TOOLS_GUIDE.md`](docs/TOOLS_GUIDE.md) | welcome / update / info tools |
-| [`docs/REPO_GUIDE.md`](docs/REPO_GUIDE.md) | `[ar0x]` keygen, build, sign, publish |
-| [`docs/INSTALLER_FLOW.md`](docs/INSTALLER_FLOW.md) | Calamares wizard + first boot |
-| [`docs/ISO_BUILD_GUIDE.md`](docs/ISO_BUILD_GUIDE.md) | ISO build, size gate, QEMU/VBox/VMware |
-| [`docs/TESTING_CHECKLIST.md`](docs/TESTING_CHECKLIST.md) | 40-item / 100% release gate |
-| [`docs/RELEASE_GUIDE.md`](docs/RELEASE_GUIDE.md) | tag, signatures, mirrors, announcement |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | v0.2 / v1.0 planning |
-| [`CHANGELOG.md`](CHANGELOG.md) | release notes template |
+**Build guide:** [`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md)
 
-## Links
+> Use a disposable virtual machine for boot testing. Do not point installation or disk-writing steps at a device containing data you need.
 
-- Source: <https://github.com/ar0x1/ar0xOS>
-- Issues: <https://github.com/ar0x1/ar0xOS/issues>
-- Discussions: <https://github.com/ar0x1/ar0xOS/discussions>
-- Docs: <https://github.com/ar0x1/ar0xOS/tree/main/docs>
-- Upstream: <https://wiki.archlinux.org/>
+## `05 / Release checklist`
 
-⚠️ RISK-050: the five endpoints above are RESERVED; `/tree/main/docs` resolves
-only after the PR is merged. Verify all with `curl -IL` at release time.
+The project structure and build tooling are in place. These release gates are still outstanding:
+
+- [ ] Generate and publish the offline GPG release-key fingerprint.
+- [ ] Build and publish the signed `[ar0x]` package repository.
+- [ ] Build the ISO and test UEFI + BIOS boot paths.
+- [ ] Complete the 40-point QA checklist and real-hardware checks.
+- [ ] Sign the release artifacts and publish the GitHub release.
+
+Until the fingerprint is published in this repository, do not trust third-party images claiming to be an official `ar0xOS` release.
+
+## `06 / Project docs`
+
+| Guide | What it covers |
+|:--|:--|
+| [`PROJECT_PLAN.md`](PROJECT_PLAN.md) | Project architecture and phase plan |
+| [`docs/DESKTOP_GUIDE.md`](docs/DESKTOP_GUIDE.md) | Hyprland, Waybar, SDDM, and desktop setup |
+| [`docs/SYSTEM_CONFIG.md`](docs/SYSTEM_CONFIG.md) | Core system configuration |
+| [`docs/TOOLS_GUIDE.md`](docs/TOOLS_GUIDE.md) | ar0x command-line utilities |
+| [`docs/BUILD_RELEASE_ISO.md`](docs/BUILD_RELEASE_ISO.md) | Host requirements and ISO build process |
+| [`docs/TESTING_CHECKLIST.md`](docs/TESTING_CHECKLIST.md) | Release QA checklist |
+| [`docs/RELEASE_GUIDE.md`](docs/RELEASE_GUIDE.md) | Signing and release process |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Upcoming milestones |
+
+## `07 / License & credits`
+
+Documentation and artwork are licensed under **CC BY-SA 4.0**. Code and bundled components retain their respective upstream licenses; see the relevant project files for details.
+
+Built by **[ar0x](https://github.com/ar0x1)** · [Repository](https://github.com/ar0x1/ar0xOS) · [Issues](https://github.com/ar0x1/ar0xOS/issues)
+
+<div align="center">
+
+`ar0xOS` · `0.1.0` · **Arch, with an ar0x identity.**
+
+</div>
