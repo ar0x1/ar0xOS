@@ -32,7 +32,7 @@
 ---
 
 > **Release notice** — `ar0xOS 0.1.0` is source-complete, but release-pending. No ISO has been built, booted, signed, or published yet. There is currently **no download**. A release will be announced here only after the build, boot tests, QA, and signing steps are complete.
-
+ 
 ## `01 / Overview`
 
 **ar0xOS** is an Arch-based, rolling Linux distribution with a **Wayland-first Hyprland desktop** and a cyberpunk / dark-hacker identity. It brings together a curated developer environment, custom ar0x utilities, and a branded graphical installer.
