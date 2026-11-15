@@ -881,7 +881,7 @@ grep -Fq 'workflow_dispatch' "${AR0X_SOURCE_ROOT}/ci/workflows/build-iso.yml" \
     || fail "Post-plan: build-iso.yml must be workflow_dispatch-only."
 # PR #1 is MERGED: main now holds all 560 files. Docs must show the plain clone
 # as canonical and must NOT still point at the stale pre-merge branch.
-for f in README.md docs/QUICKSTART_HINDI.md docs/BUILD_HOST.md docs/BUILD_RELEASE_ISO.md; do
+for f in README.md docs/BUILD_HOST.md docs/BUILD_RELEASE_ISO.md; do
     grep -Fq 'git clone https://github.com/ar0x1/ar0xOS.git' "${AR0X_SOURCE_ROOT}/${f}" \
         || fail "Post-plan: ${f} must show the canonical plain git clone (PR #1 is MERGED)."
     if grep -Fq 'arena/53f7f9f8-ar0xos' "${AR0X_SOURCE_ROOT}/${f}"; then
@@ -895,7 +895,43 @@ done
 cmp -s "${AR0X_SOURCE_ROOT}/ci/workflows/build-iso.yml" \
        "${AR0X_SOURCE_ROOT}/.github/workflows/build-iso.yml" \
     || fail "CI templates drifted: mirror ci/workflows/build-iso.yml -> .github/workflows/build-iso.yml."
-ok "Post-plan deliverables: 4 files, 0755 driver, ADR-029 staging, dispatch-only CI, merged-state docs, live .github/workflows mirror"
+# Standing user rule: ar0x ships in ENGLISH ONLY. No Hindi/Hinglish-named
+# files, no Devanagari script, and no pointer to the removed quickstart.
+if git -C "${AR0X_SOURCE_ROOT}" ls-files | grep -qiE '(^|/)[^/]*(hindi|hinglish)[^/]*$'; then
+    fail "English-only contract: a Hindi/Hinglish-named file is tracked."
+fi
+python3 - "${AR0X_SOURCE_ROOT}" <<'PYLANG' \
+    || fail "English-only contract: Devanagari script found in a tracked text file."
+import sys, subprocess, pathlib
+root = pathlib.Path(sys.argv[1])
+exts = {'.md', '.sh', '.py', '.yml', '.yaml', '.conf', '.env', '.install',
+        '.desc', '.qml', '.lua', '.css', '.txt', '.json', '.jsonc', '.rst',
+        '.service', '.desktop', '.preset', '.rules', '.xml', '.svg', '.html'}
+files = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z']).decode().split('\0')
+bad = []
+for f in files:
+    if not f:
+        continue
+    p = root / f
+    if not (p.suffix.lower() in exts or p.name in ('PKGBUILD', 'README', 'CHANGELOG')):
+        continue
+    try:
+        text = p.read_text(encoding='utf-8')
+    except (UnicodeDecodeError, OSError):
+        continue
+    for i, line in enumerate(text.splitlines(), 1):
+        if any('\u0900' <= ch <= '\u097f' for ch in line):
+            bad.append('%s:%d' % (f, i))
+if bad:
+    sys.stderr.write('Devanagari text in: %s\n' % ', '.join(bad[:10]))
+    sys.exit(1)
+print('[ OK ] English-only contract: zero Devanagari lines in %d tracked files' % len(files))
+PYLANG
+_stale_needle="QUICKSTART_""HINDI"
+if git -C "${AR0X_SOURCE_ROOT}" grep -n -F "$_stale_needle" -- README.md docs ci tools >/dev/null 2>&1; then
+    fail "English-only contract: a document still references the removed quickstart."
+fi
+ok "Post-plan deliverables: 3 files, 0755 driver, ADR-029 staging, dispatch-only CI, merged-state docs, live .github/workflows mirror, English-only contract"
 
 # Delegate the FULL post-plan structural check (hard gates, no tag/upload in the
 # driver, fork guard, Docker/Vagrant recipes, clean tracked package mirrors).

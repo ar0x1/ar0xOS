@@ -131,12 +131,40 @@ def check_policy(root):
     ok("policy: zero derived artifacts, tracked package mirrors clean and byte-identical")
 
 
+def check_english_only(root):
+    """Standing user rule: ar0x and its documentation ship in English only."""
+    skip = {".git", "build", "__pycache__"}
+    bad_names, bad_script = [], []
+    text_ext = (".md", ".sh", ".py", ".yml", ".conf", ".qml", ".lua",
+                ".css", ".txt", ".env", ".install", ".desc", ".jsonc")
+    for base, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for fn in files:
+            low = fn.lower()
+            rel = os.path.relpath(os.path.join(base, fn), root)
+            if "hindi" in low or "hinglish" in low:
+                bad_names.append(rel)
+            if low.endswith(text_ext) or fn == "PKGBUILD":
+                try:
+                    txt = (Path(base) / fn).read_text(encoding="utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+                if any("\u0900" <= ch <= "\u097f" for ch in txt):
+                    bad_script.append(rel)
+    assert not bad_names, \
+        "Hindi/Hinglish-named file found: %s" % ", ".join(bad_names[:5])
+    assert not bad_script, \
+        "Devanagari script found: %s" % ", ".join(bad_script[:5])
+    ok("English-only: zero Hindi/Hinglish filenames, zero Devanagari script")
+
+
 def run_checks(root):
     print("=== ar0x post-plan ISO build chain validation ===")
     check_driver(root)
     check_staging(root)
     check_docs(root)
     check_policy(root)
+    check_english_only(root)
     print("[ OK ] post-plan ISO build chain PASSED")
     return 0
 
@@ -223,6 +251,10 @@ def self_test(root):
     _expect_fail("live .github/workflows mirror drifted from the canonical workflow", root,
                  _edit(".github/workflows/build-iso.yml", "workflow_dispatch", "push"),
                  "live workflow drifted")
+    def _add_hindi_doc(tmp):
+        (tmp / "docs" / "QUICK" "START_HINDI.md").write_text("# n\n", encoding="utf-8")
+    _expect_fail("Hindi-named doc reintroduced into the tree", root,
+                 _add_hindi_doc, "Hindi/Hinglish-named file")
 
     print("[ OK ] post-plan ISO build chain offline self-test PASSED")
     return 0

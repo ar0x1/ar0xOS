@@ -112,7 +112,7 @@ so a plain `git clone` is correct — no branch flag needed. The working branch
 ```bash
 git clone https://github.com/ar0x1/ar0xOS.git
 cd ar0xOS
-git log -1 --oneline          # expect 4b1f7e3 Merge ar0xOS Phases 1-12 ...
+git log -1 --oneline          # expect a merge commit on main (currently 481c618, or newer)
 git branch --show-current     # main
 ./tools/build-release.sh --check
 ./tools/build-release.sh --preflight
@@ -124,7 +124,7 @@ If `tools/build-release.sh` is missing you have an old checkout:
 Run every command **inside the cloned folder**; build output goes to
 `/opt/ar0x-build/out/`, never into the checkout. Windows/macOS users should use
 an Arch VM or a cloud VPS with Docker (WSL2 privileged/loop support is
-unreliable). Full Hinglish walkthrough: `docs/QUICKSTART_HINDI.md`.
+unreliable). Full English recipes: §3 below and `docs/BUILD_HOST.md`.
 
 ## 1. The one command (after the human key step)
 
@@ -284,6 +284,21 @@ gpg --verify /opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso.sig \
 - Then, and only then: `docs/RELEASE_GUIDE.md §4` — annotated signed tag
   `v0.1.0`, `gh release create --verify-tag`, `rsync` mirrors, announcement,
   DistroWatch submission. Replace every `{{PLACEHOLDER}}`.
+
+---
+
+## 5.1 Troubleshooting (common build failures)
+
+| Problem | Fix |
+|---|---|
+| `PENDING-KEYGEN` / `--run` refuses | Run §2 again; the fingerprint must be 40 uppercase hex |
+| `makepkg refuses root` | Run `--build` as a normal user; remove `sudo` |
+| `gpg` cannot find the key | `--run` and `checksum.sh --sign` set `GNUPGHOME=${AR0X_BUILD_ROOT}/keys/gnupg` automatically; when calling `--sign` standalone, `export GNUPGHOME=/opt/ar0x-build/keys/gnupg` and check the keys directory owner |
+| `[ar0x] db missing` | `setup-repo.sh --sign` then `setup-repo.sh --verify` |
+| ISO > `2362232012` bytes | Apply the `PROJECT_PLAN.md §7` size-lever order |
+| QEMU will not start | Install `qemu-desktop` + `edk2-ovmf`, check `/dev/kvm` |
+| `pacman` signature error | `sudo pacman -Syu archlinux-keyring && sudo pacman-key --populate archlinux` |
+| `Host is not Arch-based` | Use §3A (privileged Arch container) instead of `--yes` on the host |
 
 ---
 
