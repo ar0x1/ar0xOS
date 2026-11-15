@@ -75,6 +75,32 @@ generate the master key on an air-gapped machine and build there instead.
 
 ---
 
+### Mobile phones (Android / iOS)
+
+**No — the ISO cannot be built on a phone.** `ar0x` is x86_64-only
+(`setup-build-env.sh` fails on `aarch64`), `mkarchiso` needs real root plus
+`mount`/`chroot`/`mknod`/loop devices, an Android kernel with
+`CONFIG_OVERLAY_FS`/`CONFIG_SQUASHFS`/`CONFIG_BLK_DEV_LOOP`/`CONFIG_FUSE_FS`,
+Arch's `pacman`/`makepkg`/`repo-add`/`mkarchiso` toolchain, 8 GiB RAM and
+40 GiB free. Termux/proot-distro provides a **rootless userspace chroot** via
+ptrace — no real root, no FUSE/real-filesystem mounts, no device access — and
+its Arch image is **Arch Linux ARM**, not x86_64. Cross-arch execution would
+need QEMU user-mode, and `mkarchiso` would still fail without real mounts.
+
+A phone IS useful as a **remote control**: dispatch the GitHub Actions
+workflow from the mobile browser (3 secrets + a `runner` with >= 40 GiB free),
+download the 6 artifacts (~2.2 GiB ISO needs free phone storage), SSH from
+Termux into an Arch VPS/PC and run the commands there, verify with
+`sha256sum -c SHA256SUMS`, or flash an already-built ISO to USB with
+**EtchDroid** (Android, USB OTG, no root). The build itself always happens on
+an x86_64 Arch host, a VPS, or a CI runner.
+
+References: `https://github.com/termux/proot-distro` ·
+`https://github.com/ltermux/proot-distro1` ·
+`https://github.com/etchdroid/etchdroid`
+
+---
+
 ## 0.5 Get the SOURCE first (PR #1 is MERGED — plain clone is enough)
 
 There is **no ISO to download anywhere**. What you download is the ~3.8 MB
@@ -86,7 +112,7 @@ so a plain `git clone` is correct — no branch flag needed. The working branch
 ```bash
 git clone https://github.com/ar0x1/ar0xOS.git
 cd ar0xOS
-git log -1 --oneline          # expect 4b1f7e3 Merge ar0xOS Phases 1-12 ...
+git log -1 --oneline          # expect a merge commit on main (currently 481c618, or newer)
 git branch --show-current     # main
 ./tools/build-release.sh --check
 ./tools/build-release.sh --preflight
@@ -98,7 +124,7 @@ If `tools/build-release.sh` is missing you have an old checkout:
 Run every command **inside the cloned folder**; build output goes to
 `/opt/ar0x-build/out/`, never into the checkout. Windows/macOS users should use
 an Arch VM or a cloud VPS with Docker (WSL2 privileged/loop support is
-unreliable). Full Hinglish walkthrough: `docs/QUICKSTART_HINDI.md`.
+unreliable). Full English recipes: §3 below and `docs/BUILD_HOST.md`.
 
 ## 1. The one command (after the human key step)
 
@@ -258,6 +284,21 @@ gpg --verify /opt/ar0x-build/out/ar0x-0.1.0-x86_64.iso.sig \
 - Then, and only then: `docs/RELEASE_GUIDE.md §4` — annotated signed tag
   `v0.1.0`, `gh release create --verify-tag`, `rsync` mirrors, announcement,
   DistroWatch submission. Replace every `{{PLACEHOLDER}}`.
+
+---
+
+## 5.1 Troubleshooting (common build failures)
+
+| Problem | Fix |
+|---|---|
+| `PENDING-KEYGEN` / `--run` refuses | Run §2 again; the fingerprint must be 40 uppercase hex |
+| `makepkg refuses root` | Run `--build` as a normal user; remove `sudo` |
+| `gpg` cannot find the key | `--run` and `checksum.sh --sign` set `GNUPGHOME=${AR0X_BUILD_ROOT}/keys/gnupg` automatically; when calling `--sign` standalone, `export GNUPGHOME=/opt/ar0x-build/keys/gnupg` and check the keys directory owner |
+| `[ar0x] db missing` | `setup-repo.sh --sign` then `setup-repo.sh --verify` |
+| ISO > `2362232012` bytes | Apply the `PROJECT_PLAN.md §7` size-lever order |
+| QEMU will not start | Install `qemu-desktop` + `edk2-ovmf`, check `/dev/kvm` |
+| `pacman` signature error | `sudo pacman -Syu archlinux-keyring && sudo pacman-key --populate archlinux` |
+| `Host is not Arch-based` | Use §3A (privileged Arch container) instead of `--yes` on the host |
 
 ---
 

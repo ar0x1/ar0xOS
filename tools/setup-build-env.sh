@@ -289,7 +289,7 @@ if (( CHECK_ONLY == 1 )); then
         for _v_b in "${_v_blockers[@]}"; do printf '  [X] %s\n' "$_v_b"; done
         printf '  -> --check only PRINTS what a real host would need; it installed NOTHING.\n'
         printf '  -> Full mode (sudo ... --yes) will REFUSE on this host by design.\n'
-        printf '  -> Read docs/BUILD_RELEASE_ISO.md section 0 / docs/QUICKSTART_HINDI.md section -1.\n'
+        printf '  -> Read docs/BUILD_RELEASE_ISO.md section 0 (host eligibility) and section 3.\n'
         printf '  -> You need: Arch Linux (or a privileged Arch container), 8+ GiB RAM, 40+ GiB free.\n'
     else
         printf '\n%s=== BUILD HOST VERDICT: host is a candidate (still needs root + tools) ===%s\n' \
